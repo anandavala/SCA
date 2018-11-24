@@ -1,5 +1,5 @@
 
-Repo contining code related to: Systemic Pressure Analysis (SPA)
+Repo contining R code related to: Systemic Pressure Analysis (SPA)
 
 SPA is a general method for the analysis of the prevalence of types of individuals in a population that gives insight into adaptation scenarios and evolutionary paths.
 
@@ -7,4 +7,4 @@ This type of analysis can reveal the details of the pressures through which the 
 
 If data is analysed from different populations or the same population over time, this method can give insights into the fine-structure of differences and enables detailed cross-comparisons.
 
-
+For detail see the initial report at: http://anandavala.info/SPA/spa-report-01.pdf
