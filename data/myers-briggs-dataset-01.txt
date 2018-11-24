@@ -1,0 +1,33 @@
+Sources of the data used in this Myers-Briggs dataset.
+
+# PPT, PPF & PPM from: https://www.myersbriggs.org/my-mbti-personality-type/my-mbti-results/how-frequent-is-my-type.htm
+# plus: https://www.quora.com/What-is-the-frequency-distribution-of-different-MBTI-personality-types/answer/Rahul-Tiwari-160
+
+# The same data is also available (with a subscription) from https://www.statisticbrain.com/myers-briggs-statistics/
+
+# upper and lower bounds from: https://www.capt.org/mbti-assessment/estimated-frequencies.htm?bhjs=0
+
+Columns:
+
+D1 = objective deduction (I or E)
+
+D2 = subjective deduction (N or S)
+
+D3 = subjective induction (F or T)
+
+D4 objective induction (P or J)
+
+Pair = relates each type to another type using a rotational or inversion symmetry (this is experimental / exploratory)
+
+PPT = percentage prevalence for the total population
+PPTL = PPT lower bound
+PPTU = PPT upper bound
+
+PPF = percentage prevalence for the female population
+PPFL = PPF lower bound
+PPFU = PPF upper bound
+
+PPM = percentage prevalence for the male population
+PPML = PPM lower bound
+PPMU = PPM upper bound
+

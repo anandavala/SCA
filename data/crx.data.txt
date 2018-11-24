@@ -1,0 +1,3 @@
+This data is from: http://archive.ics.uci.edu/ml/machine-learning-databases/credit-screening/crx.data
+
+It contains data regarding corporate MasterCard (credit card) applications from the Commonwealth Bank during 1984. This was a time when credit approvals was done manually, and research into automation was active to improve equity and accuracy into the credit approval process.
