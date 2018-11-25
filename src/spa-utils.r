@@ -371,3 +371,4 @@ getTypeFreqs <- function(Data, dims, symSet) {
   return(types)
 }
 
+
