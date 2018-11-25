@@ -5,54 +5,17 @@ library(ggdendro)
 library(cluster)
 library(gtools)
 
-#### load MB data ###
-loadData323 <- function() {
-  out <- read.csv(file = "./data/dataset-323.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
-  out$D1 <- as.factor(out$D1)
-  out$D2 <- as.factor(out$D2)
-  out$D3 <- as.factor(out$D3)
-  out$PP <- as.double(out$PP)
-  rownames(out) <- out$Type
+row2CharVec <- function(df, r = 1) {
+  out <- rep("", ncol(df))
+  for (c in 1:ncol(df)) {
+    out[c] <- as.character(df[r, c])
+  }
   return(out)
 }
 
-#### load MB data ###
-loadMB <- function() {
-  out <- read.csv(file = "./data/myers-briggs-dataset-01.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
-  out$D1 <- as.factor(out$D1)
-  out$D2 <- as.factor(out$D2)
-  out$D3 <- factor(out$D3, labels = c("F", "T"))
-  out$D4 <- as.factor(out$D4)
-  out$PPTL <- as.double(out$PPTL)
-  out$PPTU <- as.double(out$PPTU)
-  out$PPT <- as.double(out$PPT - 0.26 / 16)
-  out$Pair <- as.integer(out$Pair)
-  # Assemble results
-  out <- out %>%
-    mutate(LUP = (PPTL + PPTU) / 2 + 1 / 16) %>%
-    mutate(AP = (LUP + PPT) / 2) %>% # don't use PMT, its only an estimate
-    mutate(APN = (AP - min(AP)) / (max(AP) - min(AP))) %>%
-    mutate(Num = rownames(out)) %>%
-    select(Num, 1:7, AP, APN)
-  # # compute RowMean for all rows
-  # if (paramsAsFactors) {
-  #   out.numeric <- select(loadMB(paramsAsFactors = FALSE), D1, D2, D3, D4, APN)
-  # }
-  # else {
-  #   out.numeric <- select(out, D1, D2, D3, D4, APN)
-  # }
-  # rowMeans <- getRowMeans(out.numeric, out$Type)
-  # out <- mutate(out, RowMean = rowMeans$RowMean)
-  rownames(out) <- out$Type
-  # Add group id column
-  out$Grp <- rep(NA, nrow(out))
-  out[out$D2 == "N" & out$D4 == "J", ]$Grp <- 1
-  out[out$D3 == "T" & out$D4 == "P", ]$Grp <- 2
-  out[out$D3 == "F" & out$D4 == "P", ]$Grp <- 3
-  out[out$D2 == "S" & out$D4 == "J", ]$Grp <- 4
-  out$Grp <- as.factor(out$Grp)
-  return(out)
-}
+# create a large set of double lettered labels
+df <- expand.grid(LETTERS, LETTERS)
+DBLLETTERS <- sprintf("%s%s", df$Var2, df$Var1)
 
 # converts a numeric vector to a binned factor with a chosen number of bins
 n2bf <- function(vec, nbins, doubling = FALSE, asint = FALSE) {
@@ -95,39 +58,6 @@ n2bf <- function(vec, nbins, doubling = FALSE, asint = FALSE) {
   return(cut(vec, breaks = breaks, labels = labels[2:length(labels)]))
 }
 
-
-loadCRX <- function() {
-  Data <- read.table("./data/crx.data", header=F, sep = ",", na.strings = "?")
-  names(Data) <- c("Gender", "Age", "MonthlyExpenses", "MaritalStatus", "HomeStatus", "Occupation", "BankingInstitution", "YearsEmployed", "NoPriorDefault", "Employed", "CreditScore", "DriversLicense", "AccountType", "MonthlyIncome", "AccountBalance", "Approved")
-  Data$Gender <- as.factor(Data$Gender) 
-  Data$Age <- as.numeric(Data$Age)
-  Data$MonthlyExpenses <- as.integer(Data$MonthlyExpenses) 
-  Data$MaritalStatus <- as.factor(Data$MaritalStatus) 
-  Data$HomeStatus <- as.factor(Data$HomeStatus) 
-  Data$Occupation <- as.factor(Data$Occupation) 
-  Data$BankingInstitution <- as.factor(Data$BankingInstitution) 
-  Data$YearsEmployed <- as.numeric(Data$YearsEmployed) 
-  Data$NoPriorDefault <- as.factor(Data$NoPriorDefault) 
-  Data$Employed <- as.factor(Data$Employed) 
-  Data$CreditScore <- as.numeric(Data$CreditScore) 
-  Data$DriversLicense <- as.factor(Data$DriversLicense)
-  Data$AccountType <- as.factor(Data$AccountType)
-  Data$MonthlyIncome <- as.integer(Data$MonthlyIncome)
-  Data$AccountBalance <- as.numeric(Data$AccountBalance)
-  Data$Approved <- as.factor(Data$Approved)
-  
-  # convert numeric columns to binned factors
-  Data$Age <- n2bf(Data$Age, 10)
-  Data$MonthlyExpenses <- n2bf(Data$MonthlyExpenses, 6, doubling = TRUE, asint = TRUE)
-  Data$YearsEmployed <- n2bf(Data$YearsEmployed, 8, doubling = TRUE)
-  Data$CreditScore <- n2bf(Data$CreditScore, 7, doubling = TRUE, asint = TRUE)
-  Data$MonthlyIncome <- n2bf(Data$MonthlyIncome, 7, doubling = TRUE, asint = TRUE)
-  Data$AccountBalance <- n2bf(Data$AccountBalance, 16, doubling = TRUE, asint = TRUE)
-
-  # omit NAs for now but eventually have an NA category for them
-  Data <- na.omit(Data)
-  return(Data)
-}
 
 
 # plot a sorted data frame
@@ -174,7 +104,7 @@ getMasks <- function(symSet, masks = c(), str = rep("", ncol(symSet)), iter = 1,
   for (s in r) {
     str[iter] <- sprintf("%s", syms[s])
     if (iter < ncol(symSet)) masks <- getMasks(symSet, masks, str, iter + 1, constraints = constraints)
-    else if (numX(str) == 1) masks <- append(masks, paste(str, sep = "", collapse = ""))
+    else if (numX(str) == 1) masks <- append(masks, paste(str, sep = "", collapse = ","))
   }
   return(masks)
 }
@@ -210,12 +140,12 @@ getScenarios <- function(df, symSet = NULL, masks = NULL, cname = "PP", nSkip = 
   params <- list()
   origdf <- df
   maxSyms <- nrow(symSet) - 2
-  maxp <- nchar(masks[1])
+  maxp <- ncol(symSet)
   for (mask in masks) {
     df <- origdf
     pp <- 1:maxp # possible positions
     xp <- 0 # X position
-    vec <- strsplit(mask, split = "")[[1]]
+    vec <- strsplit(mask, split = ",")[[1]]
     for (p in 1:maxp) {
       if (p > length(params)) params[[p]] <- c(vec[p])
       else params[[p]] <- append(params[[p]], vec[p])
@@ -362,11 +292,9 @@ getPerms <- function(symSet) {
     perms <- rbind(perms, p1)
   }
   perms <- data.frame(na.omit(perms), stringsAsFactors = FALSE)
-  masks <- c()
   for (r in 1:nrow(perms)) {
     dims <- as.character(as.vector(perms[r,]))
     for (i in 1:length(dims)) dims[i] <- substring(dims[i], nchar(dims[i]), nchar(dims[i]))
-    masks <- append(masks, paste(dims, sep = "", collapse = ""))
   }
   out <- data.frame(Ch1 = perms[,1])
   for (c in 2:ncols) {
@@ -375,7 +303,6 @@ getPerms <- function(symSet) {
   return(out)
 }
   
-
 getAllPaths <- function(mbs, symSet, avgs = TRUE) {
   out <- getPerms(symSet)
   TGroupAP <- c()
@@ -383,7 +310,7 @@ getAllPaths <- function(mbs, symSet, avgs = TRUE) {
   TChDP <- c()
   TChTP <- c()
   for (i in 1:nrow(out)) {
-    pathDf <- getPath(mbs, as.character(as.vector(out[i, 2:ncol(out)])), symSet, withTotals = FALSE)
+    pathDf <- getPath(mbs, row2CharVec(out[i, ]), symSet, withTotals = FALSE)
     n <- nrow(pathDf)
     TGroupAP <- append(TGroupAP, sum(pathDf$GroupAP) / ifelse(avgs, n, 1))
     TChDiff <- append(TChDiff, sum(pathDf$ChDiff) / ifelse(avgs, n, 1))
@@ -406,15 +333,15 @@ getSymbolSet <- function(Data) {
     if (lvlLen > maxLvls) maxLvls <- lvlLen
   }
   symSet <- data.frame(c1 = rep(NA, maxLvls + 2))
-  
   for (c in 1:ncol(Data)) {
-    lvls <- levels(Data[,c])
+    lvls <- gsub("[^A-Za-z0-9]", "_", levels(Data[,c]))
     syms <- c(prefix, lvls)
     if (length(syms) < maxLvls + 2) {
       syms <- c(syms, rep(NA, maxLvls + 2 - length(syms)))
     }
     eval(parse(text = paste("symSet$c", c, " <- syms", sep = "")))
   }
+  colnames(symSet) <- colnames(Data)
   return(symSet)
 }
 

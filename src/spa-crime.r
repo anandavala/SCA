@@ -4,55 +4,63 @@ rm(list=ls())
 setwd("~/Documents/Projects/SPA/") # edit to suit your environment
 source("./src/spa-utils.r")
 
-loadCRX <- function() {
-  Data <- read.table("./data/crx.data", header=F, sep = ",", na.strings = "?")
-  names(Data) <- c("Gender", "Age", "MonthlyExpenses", "MaritalStatus", "HomeStatus", "Occupation", "BankingInstitution", "YearsEmployed", "NoPriorDefault", "Employed", "CreditScore", "DriversLicense", "AccountType", "MonthlyIncome", "AccountBalance", "Approved")
-  Data$Gender <- as.factor(Data$Gender) 
-  Data$Age <- as.numeric(Data$Age)
-  Data$MonthlyExpenses <- as.integer(Data$MonthlyExpenses) 
-  Data$MaritalStatus <- as.factor(Data$MaritalStatus) 
-  Data$HomeStatus <- as.factor(Data$HomeStatus) 
-  Data$Occupation <- as.factor(Data$Occupation) 
-  Data$BankingInstitution <- as.factor(Data$BankingInstitution) 
-  Data$YearsEmployed <- as.numeric(Data$YearsEmployed) 
-  Data$NoPriorDefault <- as.factor(Data$NoPriorDefault) 
-  Data$Employed <- as.factor(Data$Employed) 
-  Data$CreditScore <- as.numeric(Data$CreditScore) 
-  Data$DriversLicense <- as.factor(Data$DriversLicense)
-  Data$AccountType <- as.factor(Data$AccountType)
-  Data$MonthlyIncome <- as.integer(Data$MonthlyIncome)
-  Data$AccountBalance <- as.numeric(Data$AccountBalance)
-  Data$Approved <- as.factor(Data$Approved)
-  
-  # convert numeric columns to binned factors
-  Data$Age <- n2bf(Data$Age, 10)
-  Data$MonthlyExpenses <- n2bf(Data$MonthlyExpenses, 6, doubling = TRUE, asint = TRUE)
-  Data$YearsEmployed <- n2bf(Data$YearsEmployed, 8, doubling = TRUE)
-  Data$CreditScore <- n2bf(Data$CreditScore, 7, doubling = TRUE, asint = TRUE)
-  Data$MonthlyIncome <- n2bf(Data$MonthlyIncome, 7, doubling = TRUE, asint = TRUE)
-  Data$AccountBalance <- n2bf(Data$AccountBalance, 16, doubling = TRUE, asint = TRUE)
-  
-  # omit NAs for now but eventually have an NA category for them
-  Data <- na.omit(Data)
+loadCrime <- function() {
+  # Data <- read.table("./data/Crimes_-_2001_to_present-short.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
+  Data <- read.table("./data/Crimes_-_2001_to_present.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
+  Data$IUCR <- factor(Data$IUCR)
+  Data$Primary.Type <- factor(Data$Primary.Type)
+  Data$Description <- factor(Data$Description)
+  Data$Location.Description <- factor(Data$Location.Description)
+  Data$Arrest <- factor(Data$Arrest)
+  Data$Domestic <- factor(Data$Domestic)
+  Data$Beat <- factor(Data$Beat)
+  Data$District <- factor(Data$District)
+  Data$Ward <- factor(Data$Ward)
+  Data$Community.Area <- factor(Data$Community.Area)
+  Data$FBI.Code <- factor(Data$FBI.Code)
+  Data$Year <- factor(Data$Year)
+  Data <- select(Data, -ID, -Case.Number, -Date, -Block, -X.Coordinate, -Y.Coordinate, -Latitude, -Longitude, -Updated.On, -Location)
+  # Data$X.Coordinate <- n2bf(Data$X.Coordinate, 4)
+  # Data$Y.Coordinate <- n2bf(Data$Y.Coordinate, 4)
   return(Data)
 }
 
-Data <- loadCRX()
+Data <- loadCrime()
+str(Data)
+origData <- Data
+
+Data <- origData
+str(Data)
 
 origSymbolSet <- getSymbolSet(Data)
 
 # standardise level names in preparation for SPA
-# for (c in 1:ncol(Data)) levels(Data[,c]) <- LETTERS[1:length(levels(Data[,c]))]
+# for (c in 1:ncol(Data)) {
+#   # n <- length(levels(Data[,c]))
+#   # levels(Data[,c]) <- strsplit(paste(rep("D", n), 1:n, sep = "", collapse = ","), split = ",")[[1]]
+#   levels(Data[,c]) <- 1:length(levels(Data[,c]))
+# }
+# for (c in 1:ncol(Data)) levels(Data[,c]) <- DBLLETTERS[1:length(levels(Data[,c]))]
+
+levels(Data[,"Community.Area"]) <- DBLLETTERS[1:length(levels(Data[,"Community.Area"]))]
 
 symbolSet <- getSymbolSet(Data)
 
 # focus on relevant data
-dims <- c(1, 4, 5, 9, 10) # columns of interest
+dims <- c(2, 5, 10) # columns of interest
 colnames(Data)[dims]
 symSet <- symbolSet[,dims] # strip down to relevant columns
 symSet <- symSet[rowSums(is.na(symSet)) != ncol(symSet), ] # strip rows with all NAs
 origSymSet <- origSymbolSet[,dims] # strip down to relevant columns
 origSymSet <- origSymSet[rowSums(is.na(origSymSet)) != ncol(origSymSet), ] # strip rows with all NAs
+
+
+# each yearly dataset is a 'population sample'
+Data.years <- split(Data, Data$Year)
+names(Data.years)
+
+# choose which year to analyse
+Data <- Data.years[["2001"]]
 
 TF <- getTypeFreqs(Data, dims, symSet)
 str(TF)
@@ -61,7 +69,7 @@ str(TF)
 # TF types sorted by prevalence
 TF[order(TF$PP), ]
 
-# Plot of the sorted spectrum of prevalence values for all Myers-Briggs types. AP = %ofPop.
+# Plot of the sorted spectrum of prevalence values for all types. AP = %ofPop.
 sortedPlot(TF, "PP", ptsize = 3, datatype = "Types")
 
 # Cluster Diagram
@@ -69,10 +77,14 @@ gDist <- daisy(TF, metric = "gower")
 hc <- hclust(gDist)
 ggdendrogram(hc)
 
-
 scenarios <- getScenarios(TF, symSet, cname = "PP", nSkip = 0)
+colnames(scenarios)
+scenarios[1,]
 
-getPath(scenarios, c("1,b", "2,u", "3,g", "4,t", "5,t"), symSet)
+getPath(scenarios, c("1,THEFT", "2,true", "3,AA"), symSet)
+getPath(scenarios, c("1,THEFT", "2,true", "3,AA", "3,AB"), symSet)
+getPath(scenarios, c("1,THEFT", "2,true", "3,AA", "3,AB", "1,BATTERY"), symSet)
+getPath(scenarios, c("1,THEFT", "2,true", "3,AA", "3,AB", "1,BATTERY", "2,false"), symSet)
 
 # Plot of the sorted spectrum of group prevalence values for all adaptation scenarios. GroupAP = %ofPop
 sortedPlot(scenarios, "GroupAP", datatype = "Adaptation Scenarios")
@@ -81,19 +93,26 @@ sortedPlot(scenarios, "GroupAP", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "Diff1", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "Diff2", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "Diff3", datatype = "Adaptation Scenarios")
+sortedPlot(scenarios, "Diff16", datatype = "Adaptation Scenarios")
+sortedPlot(scenarios, "Diff34", datatype = "Adaptation Scenarios")
 
 # Plot of the sorted spectrum of demographic pressure values for all adaptation scenarios. DP = GroupAP * Diff 
 sortedPlot(scenarios, "DP1", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "DP2", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "DP3", datatype = "Adaptation Scenarios")
+sortedPlot(scenarios, "DP16", datatype = "Adaptation Scenarios")
+sortedPlot(scenarios, "DP34", datatype = "Adaptation Scenarios")
 
 # Plot of the sorted spectrum of TP values for all adaptation scenarios. TP = Diff / GroupAP
 sortedPlot(scenarios, "TP1", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "TP2", datatype = "Adaptation Scenarios")
 sortedPlot(scenarios, "TP3", datatype = "Adaptation Scenarios")
+sortedPlot(scenarios, "TP16", datatype = "Adaptation Scenarios")
+sortedPlot(scenarios, "TP34", datatype = "Adaptation Scenarios")
 
 
 paths <- getAllPaths(scenarios, symSet)
+
 str(paths)
 
 sortedPlot(paths, "TGroupAP", lblsize = 4, datatype = "Evolutionary Paths")
@@ -106,3 +125,5 @@ sortedPlot(paths, "TChDP", lblsize = 4, datatype = "Evolutionary Paths")
 
 # Plot of the sorted spectrum of total targeted pressure values for all 4 step evolutionary paths.
 sortedPlot(paths, "TChTP", lblsize = 4, datatype = "Evolutionary Paths")
+
+

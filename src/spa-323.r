@@ -4,6 +4,16 @@ rm(list=ls())
 setwd("~/Documents/Projects/SPA/") # edit to suit your environment
 source("./src/spa-utils.r")
 
+loadData323 <- function() {
+  out <- read.csv(file = "./data/dataset-323.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
+  out$D1 <- as.factor(out$D1)
+  out$D2 <- as.factor(out$D2)
+  out$D3 <- as.factor(out$D3)
+  out$PP <- as.double(out$PP)
+  rownames(out) <- out$Type
+  return(out)
+}
+
 df <- loadData323()
 
 sum(df$PP)

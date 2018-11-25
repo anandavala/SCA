@@ -4,6 +4,34 @@ rm(list=ls())
 setwd("~/Documents/Projects/SPA/") # edit to suit your environment
 source("./src/spa-utils.r")
 
+loadMB <- function() {
+  out <- read.csv(file = "./data/myers-briggs-dataset-01.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
+  out$D1 <- as.factor(out$D1)
+  out$D2 <- as.factor(out$D2)
+  out$D3 <- factor(out$D3, labels = c("F", "T"))
+  out$D4 <- as.factor(out$D4)
+  out$PPTL <- as.double(out$PPTL)
+  out$PPTU <- as.double(out$PPTU)
+  out$PPT <- as.double(out$PPT - 0.26 / 16)
+  out$Pair <- as.integer(out$Pair)
+  # Assemble results
+  out <- out %>%
+    mutate(LUP = (PPTL + PPTU) / 2 + 1 / 16) %>%
+    mutate(AP = (LUP + PPT) / 2) %>% # don't use PMT, its only an estimate
+    mutate(APN = (AP - min(AP)) / (max(AP) - min(AP))) %>%
+    mutate(Num = rownames(out)) %>%
+    select(Num, 1:7, AP, APN)
+  rownames(out) <- out$Type
+  # Add group id column
+  out$Grp <- rep(NA, nrow(out))
+  out[out$D2 == "N" & out$D4 == "J", ]$Grp <- 1
+  out[out$D3 == "T" & out$D4 == "P", ]$Grp <- 2
+  out[out$D3 == "F" & out$D4 == "P", ]$Grp <- 3
+  out[out$D2 == "S" & out$D4 == "J", ]$Grp <- 4
+  out$Grp <- as.factor(out$Grp)
+  return(out)
+}
+
 MB <- loadMB()
 
 MBsymbolSet <- data.frame(c1 = c("X", "_", "I", "E"),
@@ -45,5 +73,4 @@ getPath(MBS, c("1,E", "3,F", "4,J", "2,N", "1,I"), MBsymbolSet)
 
 paths <- getAllPaths(MBS, MBsymbolSet)
 
-paths["NIPF",]
 paths[1:20,]
