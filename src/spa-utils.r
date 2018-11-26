@@ -131,7 +131,7 @@ num_ <- function(strs) { # strs is a vector of strings
 }
 
 # function, given a mask compute some statistics for the associated group of types
-getScenarios <- function(df, symSet = NULL, masks = NULL, cname = "PP", nSkip = 1) {
+getScenarios <- function(df, symSet = NULL, masks = NULL, cname = "PP", nSkip = 0) {
   if (is.null(masks)) masks <- getMasks(symSet)
   groupAPs <- c()
   ratios <- list()
@@ -211,14 +211,51 @@ getScenarios <- function(df, symSet = NULL, masks = NULL, cname = "PP", nSkip = 
   return(out)
 }
 
+getPathOnDemand <- function(tf, choices, symSet, undef = ncol(symSet) - 1, chosen = rep("",ncol(symSet)), withTotals = TRUE) {
+  if (length(choices) > 0) {
+    choice = choices[1]
+    if (length(choices) > 1) choices <- choices[2:length(choices)]
+    else choices <- c()
+    cs <- strsplit(choice, split = ",")[[1]]
+    c <- as.integer(cs[1])
+    r <- getRowOfParam(as.character(cs[2]), c, symSet)
+    if (undef < 0) {
+      undef <- 0
+    }
+    # create a scenario set with dim c == "X" and N_ == undef
+    chosen[c] <- "X"
+    masks <- getMasks(symSet, constraints = chosen)
+    chosen[c] <- as.character(cs[2])
+    masks <- masks[num_(masks) == undef]
+    mbs <- getScenarios(tf, symSet, masks, nSkip = 0)
+    mbs$Choice <- as.character(cs[2])
+    mbs$ChDiff <- eval(parse(text = paste("mbs$Diff", r - 2, sep = "")))
+    mbs$ChDP <- eval(parse(text = paste("mbs$DP", r - 2, sep = "")))
+    mbs$ChTP <- eval(parse(text = paste("mbs$TP", r - 2, sep = "")))
+    df1 <- select(mbs, GroupAP, Choice, ChDiff, ChDP, ChTP)
+    df2 <- getPathOnDemand(tf, choices, symSet, undef - 1, chosen, FALSE)
+    if (!is.null(df2)) df2 <- select(df2, GroupAP, Choice, ChDiff, ChDP, ChTP)
+    if (withTotals) {
+      df12 <- rbind(df1, df2)
+      df3 <- data.frame(GroupAP = c("","",""), Choice = c("","",""), ChDiff = c("","",""), ChDP = c("","",""), ChTP = c("","",""))
+      rownames(df3) <- c("-------" ,"Totals", "Averages")
+      n <- nrow(df12)
+      df3$GroupAP<- c("", sum(df12$GroupAP), sum(df12$GroupAP) / n)
+      df3$ChDiff<- c("", sum(df12$ChDiff), sum(df12$ChDiff) / n)
+      df3$ChDP <- c("", sum(df12$ChDP), sum(df12$ChDP) / n)
+      df3$ChTP <- c("", sum(df12$ChTP), sum(df12$ChTP) / n)
+      return(rbind(df12, df3))
+    }
+    else {
+      return(rbind(df1, df2))
+    }
+  }
+}
+
 
 # each path is defined by a set of four choices, e.g. c("1,A", "2,B", "3,A", "2,A")
 # traverse this sequence of choices and print details of each step
-getPath <- function(mbs, choices, symSet, undef = -1, chosen = NULL, withTotals = TRUE, origmbs = mbs) {
-  if (is.null(chosen)) {
-    chosen <- rep("",ncol(symSet))
-    undef = length(chosen) - 1
-  }
+getPath <- function(mbs, choices, symSet, undef = ncol(symSet) - 1, chosen = rep("",ncol(symSet)), withTotals = TRUE, origmbs = mbs) {
   if (length(choices) > 0) {
     choice = choices[1]
     if (length(choices) > 1) choices <- choices[2:length(choices)]

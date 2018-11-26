@@ -5,8 +5,8 @@ setwd("~/Documents/Projects/SPA/") # edit to suit your environment
 source("./src/spa-utils.r")
 
 loadCrime <- function() {
-  # Data <- read.table("./data/Crimes_-_2001_to_present-short.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
-  Data <- read.table("./data/Crimes_-_2001_to_present.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
+  Data <- read.table("./data/Crimes_-_2001_to_present-short.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
+  # Data <- read.table("./data/Crimes_-_2001_to_present.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
   Data$IUCR <- factor(Data$IUCR)
   Data$Primary.Type <- factor(Data$Primary.Type)
   Data$Description <- factor(Data$Description)
@@ -47,20 +47,19 @@ levels(Data[,"Community.Area"]) <- DBLLETTERS[1:length(levels(Data[,"Community.A
 symbolSet <- getSymbolSet(Data)
 
 # focus on relevant data
-dims <- c(2, 5, 10) # columns of interest
+dims <- c(2, 5, 6) # columns of interest
 colnames(Data)[dims]
 symSet <- symbolSet[,dims] # strip down to relevant columns
 symSet <- symSet[rowSums(is.na(symSet)) != ncol(symSet), ] # strip rows with all NAs
 origSymSet <- origSymbolSet[,dims] # strip down to relevant columns
 origSymSet <- origSymSet[rowSums(is.na(origSymSet)) != ncol(origSymSet), ] # strip rows with all NAs
 
-
-# each yearly dataset is a 'population sample'
-Data.years <- split(Data, Data$Year)
-names(Data.years)
-
-# choose which year to analyse
-Data <- Data.years[["2001"]]
+# # each yearly dataset is a 'population sample'
+# Data.years <- split(Data, Data$Year)
+# names(Data.years)
+# 
+# # choose which year to analyse
+# Data <- Data.years[["2015"]]
 
 TF <- getTypeFreqs(Data, dims, symSet)
 str(TF)
@@ -77,14 +76,26 @@ gDist <- daisy(TF, metric = "gower")
 hc <- hclust(gDist)
 ggdendrogram(hc)
 
-scenarios <- getScenarios(TF, symSet, cname = "PP", nSkip = 0)
+scenarios <- getScenarios(TF, symSet)
 colnames(scenarios)
-scenarios[1,]
 
-getPath(scenarios, c("1,THEFT", "2,true", "3,AA"), symSet)
-getPath(scenarios, c("1,THEFT", "2,true", "3,AA", "3,AB"), symSet)
-getPath(scenarios, c("1,THEFT", "2,true", "3,AA", "3,AB", "1,BATTERY"), symSet)
-getPath(scenarios, c("1,THEFT", "2,true", "3,AA", "3,AB", "1,BATTERY", "2,false"), symSet)
+# Testing the new on-demand approach by comparing it to the results of the old pre-computed approach
+# compute path statistics without needing to first pre-compute all adaptation scenarios
+getPathOnDemand(TF, c("1,THEFT", "2,false", "3,false", "1,NARCOTICS", "2,true", "3,false"), symSet)
+# compare with
+getPath(scenarios, c("1,THEFT", "2,false", "3,false", "1,NARCOTICS", "2,true", "3,false"), symSet)
+
+# compute particular adaptation statistics without pre-computing them all
+scenarios[1,]
+getScenarios(TF, symSet, getMasks(symSet, constraints = c("", "_", "_")))
+
+scenarios[10,]
+getScenarios(TF, symSet, getMasks(symSet, constraints = c("_", "", "_")))
+
+# so now we don't need to pre-compute all scenarios anymore!
+# unless we wish to analyse the entire dataset, such as sorting to find the adaptations with the most and least pressure.
+
+# End test
 
 # Plot of the sorted spectrum of group prevalence values for all adaptation scenarios. GroupAP = %ofPop
 sortedPlot(scenarios, "GroupAP", datatype = "Adaptation Scenarios")
