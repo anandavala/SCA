@@ -67,11 +67,14 @@ sortedPlot <- function(df, sortby, lblsize = NULL, datatype = "", ylabel = "", p
   rank <- 1:nrow(df)
   plt <- ggplot(df, aes(x = rank, y = eval(parse(text = sortby)))) +
     geom_point(size = ptsize) +
-    scale_x_continuous(breaks = rank, labels = rownames(df)) +
-    theme(axis.text.x = element_text(face="bold", angle=90, size = lblsize)) +
     ylab(ylabel) +
     xlab(sprintf("%s sorted by ascending %s values", datatype, sortby)) +
     ggtitle(sprintf("Sorted Plot: %s", suffix), subtitle = sprintf("%s for %s sorted by ascending %s values", sortby, datatype, sortby))
+  if (!is.null(lblsize)) {
+    plt <- plt + 
+      scale_x_continuous(breaks = rank, labels = rownames(df)) +
+      theme(axis.text.x = element_text(face="bold", angle=90, size = lblsize))
+  }
   plt
 }
 
