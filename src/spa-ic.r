@@ -29,9 +29,9 @@ getHexagrams <- function(n = 10000) {
   return(out)
 }
 
+# 100,000 hexagrams. For some reason it is faster to do this in small chunks
 Data <- getHexagrams(20000)
 for (i in 1:4) Data <- rbind(Data, getHexagrams(20000))
-# for some reason it is faster to do this in small chunks
 
 str(Data)
 
