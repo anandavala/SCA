@@ -4,6 +4,29 @@ library(ggplot2)
 library(ggdendro)
 library(cluster)
 library(gtools)
+library(igraph)
+source("./src/map.R") # used to plot page rank results
+
+loadMB <- function() {
+  out <- read.csv(file = "./data/myers-briggs-dataset-01.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
+  out$D1 <- as.factor(out$D1)
+  out$D2 <- as.factor(out$D2)
+  out$D3 <- factor(out$D3, labels = c("F", "T"))
+  out$D4 <- as.factor(out$D4)
+  out$PPT <- as.double(out$PPT - 0.26 / 16)
+  out$PPM <- as.double(out$PPM)
+  out$PPF <- as.double(out$PPF - 2.6 / 16)
+  # Assemble results
+  rownames(out) <- out$Type
+  # Add group id column
+  out$Grp <- rep(NA, nrow(out))
+  out[out$D2 == "N" & out$D4 == "J", ]$Grp <- 1
+  out[out$D3 == "T" & out$D4 == "P", ]$Grp <- 2
+  out[out$D3 == "F" & out$D4 == "P", ]$Grp <- 3
+  out[out$D2 == "S" & out$D4 == "J", ]$Grp <- 4
+  out$Grp <- as.factor(out$Grp)
+  return(out)
+}
 
 row2CharVec <- function(df, r = 1) {
   out <- rep("", ncol(df))
@@ -58,8 +81,6 @@ n2bf <- function(vec, nbins, doubling = FALSE, asint = FALSE) {
   return(cut(vec, breaks = breaks, labels = labels[2:length(labels)]))
 }
 
-
-
 # plot a sorted data frame
 # first sort the values, then plot them to see how they vary over the spectrum
 sortedPlot <- function(df, sortby, lblsize = NULL, datatype = "", ylabel = "", ptsize = 1, suffix = "") {
@@ -67,6 +88,8 @@ sortedPlot <- function(df, sortby, lblsize = NULL, datatype = "", ylabel = "", p
   rank <- 1:nrow(df)
   plt <- ggplot(df, aes(x = rank, y = eval(parse(text = sortby)))) +
     geom_point(size = ptsize) +
+    scale_x_continuous(breaks = rank, labels = rownames(df)) +
+    theme(axis.text.x = element_text(face="bold", angle=90, size = lblsize)) +
     ylab(ylabel) +
     xlab(sprintf("%s sorted by ascending %s values", datatype, sortby)) +
     ggtitle(sprintf("Sorted Plot: %s", suffix), subtitle = sprintf("%s for %s sorted by ascending %s values", sortby, datatype, sortby))
@@ -78,12 +101,16 @@ sortedPlot <- function(df, sortby, lblsize = NULL, datatype = "", ylabel = "", p
   plt
 }
 
-numX <- function(str) { # str is vector of characters
+numChar <- function(vec, chr) { # vec is vector of characters
   count <- 0
-  for (i in 1:length(str)) {
-    if (str[i] == "X") count <- count + 1
+  for (i in 1:length(vec)) {
+    if (vec[i] == chr) count <- count + 1
   }
   return(count)
+}
+
+numX <- function(vec) { # vec is vector of characters
+  return(numChar(vec, "X"))
 }
 
 # return the row number for a given symbol within a given dimension
@@ -120,22 +147,12 @@ colFromList <- function(lst, cnum) {
   return(out)
 }
 
-num_ <- function(strs) { # strs is a vector of strings
-  res <- c()
-  for (str in strs) {
-    str <- strsplit(str, "")[[1]]
-    count <- 0
-    for (i in 1:length(str)) {
-      if (str[i] == "_") count <- count + 1
-    }
-    res <- append(res, count)
-  }
-  return(res)
+num_ <- function(vec) { # vec is a vector of strings
+  return(numChar(vec, "_"))
 }
 
 # function, given a mask compute some statistics for the associated group of types
-getScenarios <- function(df, symSet = NULL, masks = NULL, cname = "PP", nSkip = 0) {
-  if (is.null(masks)) masks <- getMasks(symSet)
+getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cname = "PP", nSkip = 0) {
   groupAPs <- c()
   ratios <- list()
   pps <- list()
@@ -214,7 +231,7 @@ getScenarios <- function(df, symSet = NULL, masks = NULL, cname = "PP", nSkip = 
   return(out)
 }
 
-getPathOnDemand <- function(tf, choices, symSet, undef = ncol(symSet) - 1, chosen = rep("",ncol(symSet)), withTotals = TRUE) {
+getPathOnDemand <- function(tf, choices, symSet, chosen = rep("",ncol(symSet)), undef = numChar(chosen, "") - 1, withTotals = TRUE) {
   if (length(choices) > 0) {
     choice = choices[1]
     if (length(choices) > 1) choices <- choices[2:length(choices)]
@@ -258,7 +275,7 @@ getPathOnDemand <- function(tf, choices, symSet, undef = ncol(symSet) - 1, chose
 
 # each path is defined by a set of four choices, e.g. c("1,A", "2,B", "3,A", "2,A")
 # traverse this sequence of choices and print details of each step
-getPath <- function(mbs, choices, symSet, undef = ncol(symSet) - 1, chosen = rep("",ncol(symSet)), withTotals = TRUE, origmbs = mbs) {
+getPath <- function(mbs, choices, symSet, chosen = rep("",ncol(symSet)), undef = numChar(chosen, "") - 1, withTotals = TRUE, origmbs = mbs) {
   if (length(choices) > 0) {
     choice = choices[1]
     if (length(choices) > 1) choices <- choices[2:length(choices)]
@@ -278,7 +295,7 @@ getPath <- function(mbs, choices, symSet, undef = ncol(symSet) - 1, chosen = rep
     mbs$ChTP <- eval(parse(text = paste("mbs$TP", r - 2, sep = "")))
     df1 <- mbs[eval(parse(text = paste("mbs$D", c, sep = ""))) == "X" & mbs$N_ == undef, ]
     df1 <- select(df1, GroupAP, Choice, ChDiff, ChDP, ChTP)
-    df2 <- getPath(mbs[eval(parse(text = paste("mbs$D", c, sep = ""))) == symSet[r,c], ], choices, symSet, undef - 1, chosen, FALSE, origmbs = origmbs)
+    df2 <- getPath(mbs[eval(parse(text = paste("mbs$D", c, sep = ""))) == symSet[r,c], ], choices, symSet, chosen, undef - 1, FALSE, origmbs = origmbs)
     if (!is.null(df2)) df2 <- select(df2, GroupAP, Choice, ChDiff, ChDP, ChTP)
     if (withTotals) {
       df12 <- rbind(df1, df2)
@@ -343,14 +360,14 @@ getPerms <- function(symSet) {
   return(out)
 }
   
-getAllPaths <- function(mbs, symSet, avgs = TRUE) {
+getAllPaths <- function(mbs, symSet, chosen = rep("",ncol(symSet)), avgs = TRUE) {
   out <- getPerms(symSet)
   TGroupAP <- c()
   TChDiff <- c()
   TChDP <- c()
   TChTP <- c()
   for (i in 1:nrow(out)) {
-    pathDf <- getPath(mbs, row2CharVec(out[i, ]), symSet, withTotals = FALSE)
+    pathDf <- getPath(mbs, row2CharVec(out[i, ]), symSet, withTotals = FALSE, chosen = chosen)
     n <- nrow(pathDf)
     TGroupAP <- append(TGroupAP, sum(pathDf$GroupAP) / ifelse(avgs, n, 1))
     TChDiff <- append(TChDiff, sum(pathDf$ChDiff) / ifelse(avgs, n, 1))
@@ -412,3 +429,201 @@ getTypeFreqs <- function(Data, dims, symSet) {
 }
 
 
+# given a type-freq table, what are the pressures on a particular type?
+# The pressures on the first dimension are shown in the bottom line,
+# up to the last dimension in the top line.
+# Positive values indicate pressure to remain the same,
+# negative values indicate pressure to change.
+getPressures <- function(tf, symSet, chosen) {
+  out <- data.frame()
+  for (i in ncol(symSet):1) {
+    out <- rbind(out, getPathOnDemand(tf, c(paste(i, chosen[i], sep = ",")), symSet, chosen, withTotals = FALSE))
+  }
+  return(out)
+}
+
+# only works with binary symbol sets, or the first two elements of non-binary
+flipTaiji <- function(chosen, l, symSet) {
+  str <- chosen[l]
+  if (str == symSet[3,l]) return(as.character(symSet[4,l]))
+  else if (str == symSet[4,l]) return(as.character(symSet[3,l]))
+  else return(NA)
+}
+
+addWidth <- function(g) {
+  minW <- min(E(g)$weight)
+  maxW <- max(E(g)$weight)
+  E(g)$width <- (E(g)$weight - minW) / (maxW - minW) * 9 + 1
+  return(g)
+}
+
+
+getAllLinePressures <- function(tf, symSet) {
+  ndims <- ncol(symSet)
+  allP <- data.frame()
+  for (i in 1:nrow(tf)) {
+    chosen <- row2CharVec(tf[i,1:ndims])
+    p <- getPressures(tf, symSet, chosen)
+    allP <- rbind(allP, p)
+  }
+  return(allP)
+}
+  
+# with onlyMax == FALSE we consider all lines of a hexagram
+# with onlyMax == TRUE we only consider the lines of a hexagram with maximum pressure
+# the former is better for finding all pressured changes, 
+# but the latter is better for visualising the overall structure of connections
+mkGraph <- function(tf, symSet, onlyMax = FALSE) {
+  ndims <- ncol(symSet)
+  orderedTF <- tf[order(tf$PP), ]
+  cName <- "ChDiff"
+  g<- graph.empty(nrow(orderedTF), directed = TRUE)
+  V(g)$name <- rownames(tf)
+  maxP <- max(getAllLinePressures(TF, symSet)[,cName])
+  for (i in 1:nrow(orderedTF)) {
+    hexId <- rownames(orderedTF)[i]
+    chosen <- row2CharVec(orderedTF[i,1:ndims])
+    p <- getPressures(orderedTF, symSet, chosen)
+    rownames(p) <- ndims:1
+    if (onlyMax) {
+      minp <- p[p$ChDiff == min(p$ChDiff),]
+      for (r in 1:nrow(minp)) { # for each maximum pressure line
+        linePressure <- minp[r, cName]
+        if (linePressure < 0) {
+          newChosen <- chosen
+          l <- as.integer(rownames(minp)[r])
+          newChosen[l] <- flipTaiji(newChosen, l, symSet)
+          evalStr <- "rownames(orderedTF[orderedTF$L1 == newChosen[1]"
+          for (l in 2:ndims) {
+            evalStr <- paste(evalStr, " & orderedTF$L", l, " == newChosen[", l, "]", sep = "")
+          }
+          evalStr <- paste(evalStr, ", ])", sep = "")
+          newHexId <- eval(parse(text = evalStr))
+          g <- add.edges(g, c(hexId,newHexId), weight = c(-linePressure), line = l)
+        }
+      }
+    }
+    else {
+      for (l in ndims:1) { # for each line
+        linePressure <- p[ndims - l + 1, cName]
+        if (linePressure < 0) {
+          newChosen <- chosen
+          newChosen[l] <- flipTaiji(newChosen, l, symSet)
+          evalStr <- "rownames(orderedTF[orderedTF$L1 == newChosen[1]"
+          for (c in 2:ndims) {
+            evalStr <- paste(evalStr, " & orderedTF$L", c, " == newChosen[", c, "]", sep = "")
+          }
+          evalStr <- paste(evalStr, ", ])", sep = "")
+          newHexId <- eval(parse(text = evalStr))
+          g <- add.edges(g, c(hexId,newHexId), weight = c(-linePressure), line = l)
+        }
+      }
+    }
+  }
+  return(addWidth(g))
+}
+
+getPageRanked <- function(g, doPlot = TRUE, layout = layout.auto(g)) {
+  pr <- page.rank(g)$vector
+  # plot.igraph(g, layout=layout, vertex.size=map(pr, c(10,15)), vertex.color=map(pr, c(10,15)), 
+  #      vertex.label.font = 2, vertex.label.cex = 1.1, vertex.label.dist = 1.5,
+  #      edge.arrow.size = 1,
+  #      edge.width = E(g)$width)
+  eqarrowPlot(g, layout.auto(g), edge.arrow.size=E(g)$width/8,
+              edge.width=E(g)$width, edge.label = NA, pr = pr)
+  return(pr)
+}
+
+getDecomposition <- function(g) {
+  dg <- decompose.graph(g) # returns a list of subgraphs
+  dgEdges <- list()
+  dgVertices <- list()
+  dgMaxPressure <- list()
+  for (i in 1:length(dg)) {
+    tmpg <- dg[[i]]
+    edges <- as.data.frame(get.edgelist(tmpg))
+    edges$line <- E(tmpg)$line
+    edges$weight <- E(tmpg)$weight
+    edges <- edges[order(-edges$weight),]
+    dgEdges <- append(dgEdges, list(edges))
+    dgVertices <- append(dgVertices, list(V(tmpg)))
+    if (nrow(edges) > 0) {
+      dgMaxPressure <- append(dgMaxPressure, list(edges[1, "weight"]))
+    }
+    else {
+      dgMaxPressure <- append(dgMaxPressure, list(0))
+    }
+  }
+  weightOrder <- order(-colFromList(dgMaxPressure, 1))
+  return(list(dg = dg, dgEdges = dgEdges, dgVertices = dgVertices, dgMaxPressure = dgMaxPressure, weightOrder = weightOrder))
+}
+
+# adapted from: https://stackoverflow.com/questions/16942553/a-hack-to-allow-arrows-size-in-r-igraph-to-match-edge-width
+eqarrowPlot <- function(graph, layout, edge.lty=rep(1, ecount(graph)),
+                        edge.arrow.size=rep(1, ecount(graph)),
+                        edge.width=rep(1, ecount(graph)),
+                        edge.label=NA,
+                        vertex.shape="circle",
+                        edge.curved=autocurve.edges(graph), pr, ...) {
+  mapResf <- map(pr, c(10,15))
+  plot.igraph(graph, edge.lty=0, edge.arrow.size=0, layout=layout,
+       vertex.shape="none", vertex.label=NA)
+  for (e in seq_len(ecount(graph))) {
+    graph2 <- delete.edges(graph, E(graph)[(1:ecount(graph))[-e]])
+    plot.igraph(graph2, edge.lty=edge.lty[e], edge.arrow.size=edge.arrow.size[e],
+         edge.width=edge.width[e],
+         edge.label = edge.label[e],
+         edge.curved=edge.curved[e], layout=layout, vertex.shape="none",
+         vertex.label=NA, add=TRUE, ...)
+  }
+  plot.igraph(graph, edge.lty=0, edge.arrow.size=0, layout=layout,
+       vertex.shape=vertex.shape, 
+       vertex.size=mapResf[V(graph)$name], vertex.color=mapResf[V(graph)$name], vertex.label.font = 2, vertex.label.cex = 1, vertex.label.dist = 1.5,
+       add=TRUE, ...)
+  invisible(NULL)
+}
+
+analyseSubgraph <- function(decomp, rank, interactive = TRUE, getResult = FALSE, pr, urlTemplate = c(), layoutFunc = layout.auto) {
+  ind <- decomp$weightOrder[rank]
+  tmpg <- decomp$dg[[ind]]
+  edges <- decomp$dgEdges[[ind]]
+  origRows <- nrow(edges)
+  if (length(urlTemplate) > 0 & origRows > 0) {
+    edges$url <- paste(urlTemplate[1], edges$V1, urlTemplate[2], edges$V2, urlTemplate[3], sep = "")
+  }
+  if (interactive) {
+    print(names(decomp$dgVertices[[ind]]))
+    if (nrow(edges) > 0) {
+      print(edges)
+    }
+  }
+  if (interactive & origRows > 0) {
+    mapResf <- map(pr, c(10,15))
+    # plot.igraph(tmpg, layout=layout, vertex.size=mapResf[V(tmpg)$name], vertex.color=mapResf[V(tmpg)$name], vertex.label.font = 2, vertex.label.cex = 1, vertex.label.dist = 1.5,
+    #      edge.arrow.size = 2, edge.label = sprintf("%d\n%0.2f", E(tmpg)$line, E(tmpg)$weight), edge.width = E(tmpg)$width)
+    eqarrowPlot(tmpg, layout = layoutFunc(tmpg), edge.arrow.size=E(tmpg)$width/6,
+                edge.width=E(tmpg)$width, edge.label = sprintf("%d\n%0.2f", E(tmpg)$line, E(tmpg)$weight), pr = pr)
+  }
+  if (getResult) return(edges)
+}
+
+# for each subgraph in weight order
+analyseAllSubgraphs <- function(decomp, interactive = FALSE, pr, urlTemplate = c()) {
+  out <- data.frame()
+  for (i in 1:length(decomp$weightOrder)) {
+    if (interactive) print(paste("----  Subgraph: ", i, "  ----", sep = ""))
+    out <- rbind(out, analyseSubgraph(decomp, i, interactive, TRUE, pr, urlTemplate))
+    if (interactive) invisible(readline(prompt="Press [enter] to continue and esc to quit"))
+  }
+  out <- out[order(-out$weight),]
+  rownames(out) <- NULL
+  return(out)
+}
+
+# remove the sub-threshold edges from the graph for better visualisation...
+trimGraph <- function(g, percentile) {
+  maxPressure <- max(E(g)$weight)
+  threshold <- maxPressure * (1 - percentile)
+  outG <- delete.edges(g, which(E(g)$weight < threshold))
+  return(addWidth(outG))
+}
