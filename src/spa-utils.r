@@ -7,27 +7,6 @@ library(gtools)
 library(igraph)
 source("./src/map.R") # used to plot page rank results
 
-loadMB <- function() {
-  out <- read.csv(file = "./data/myers-briggs-dataset-01.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
-  out$D1 <- as.factor(out$D1)
-  out$D2 <- as.factor(out$D2)
-  out$D3 <- factor(out$D3, labels = c("F", "T"))
-  out$D4 <- as.factor(out$D4)
-  out$PPT <- as.double(out$PPT - 0.26 / 16)
-  out$PPM <- as.double(out$PPM)
-  out$PPF <- as.double(out$PPF - 2.6 / 16)
-  # Assemble results
-  rownames(out) <- out$Type
-  # Add group id column
-  out$Grp <- rep(NA, nrow(out))
-  out[out$D2 == "N" & out$D4 == "J", ]$Grp <- 1
-  out[out$D3 == "T" & out$D4 == "P", ]$Grp <- 2
-  out[out$D3 == "F" & out$D4 == "P", ]$Grp <- 3
-  out[out$D2 == "S" & out$D4 == "J", ]$Grp <- 4
-  out$Grp <- as.factor(out$Grp)
-  return(out)
-}
-
 row2CharVec <- function(df, r = 1) {
   out <- rep("", ncol(df))
   for (c in 1:ncol(df)) {
@@ -180,7 +159,7 @@ getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cname = "P
     if (length(pp) > 0) {
       for (i in 1:length(pp)) {
         tmp <- split(df, df[, nSkip + pp[i]])
-        df <- eval(parse(text = paste("tmp$", vec[pp[i]], sep = "")))
+        df <- eval(parse(text = paste("tmp[[\"", vec[pp[i]], "\"]]", sep = "")))
       }
     }
     tmp <- split(df, df[, nSkip + xp])
@@ -188,7 +167,7 @@ getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cname = "P
     nsyms <- sum(!is.na(symSet[,xp])) - 2
     ps <- rep(NA, nsyms)
     for (i in 1:nsyms) {
-      subdfs[[i]] <- eval(parse(text = paste("tmp$", as.character(symSet[2 + i, xp]), sep = "")))
+      subdfs[[i]] <- eval(parse(text = paste("tmp[[\"", as.character(symSet[2 + i, xp]), "\"]]", sep = "")))
       ps[i] <- sum(eval(parse(text = paste("subdfs[[i]]$", cname, sep = ""))))
     }
     sumps <- sum(ps)
@@ -381,6 +360,10 @@ getAllPaths <- function(mbs, symSet, chosen = rep("",ncol(symSet)), avgs = TRUE)
   return(out)
 }
 
+standardiseLevels <- function(column) {
+  return(gsub("[^A-Za-z0-9]", "_", levels(column)))
+}
+
 # build symbolset from data frame
 getSymbolSet <- function(Data) {
   prefix <- c("X", "_")
@@ -391,7 +374,7 @@ getSymbolSet <- function(Data) {
   }
   symSet <- data.frame(c1 = rep(NA, maxLvls + 2))
   for (c in 1:ncol(Data)) {
-    lvls <- gsub("[^A-Za-z0-9]", "_", levels(Data[,c]))
+    lvls <- levels(Data[,c])
     syms <- c(prefix, lvls)
     if (length(syms) < maxLvls + 2) {
       syms <- c(syms, rep(NA, maxLvls + 2 - length(syms)))
@@ -450,6 +433,13 @@ flipTaiji <- function(chosen, l, symSet) {
   else return(NA)
 }
 
+# works with any symbol set
+getChanges <- function(chosen, l, symSet) {
+  str <- chosen[l]
+  options <- as.character(symSet[3:sum(!is.na(symSet[,l])),l])
+  return(options[options != str])
+}
+
 addWidth <- function(g) {
   minW <- min(E(g)$weight)
   maxW <- max(E(g)$weight)
@@ -468,7 +458,7 @@ getAllLinePressures <- function(tf, symSet) {
   }
   return(allP)
 }
-  
+
 # with onlyMax == FALSE we consider all lines of a hexagram
 # with onlyMax == TRUE we only consider the lines of a hexagram with maximum pressure
 # the former is better for finding all pressured changes, 
@@ -490,16 +480,30 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE) {
       for (r in 1:nrow(minp)) { # for each maximum pressure line
         linePressure <- minp[r, cName]
         if (linePressure < 0) {
-          newChosen <- chosen
           l <- as.integer(rownames(minp)[r])
-          newChosen[l] <- flipTaiji(newChosen, l, symSet)
-          evalStr <- "rownames(orderedTF[orderedTF$L1 == newChosen[1]"
-          for (l in 2:ndims) {
-            evalStr <- paste(evalStr, " & orderedTF$L", l, " == newChosen[", l, "]", sep = "")
+          changes <- getChanges(chosen, l, symSet)
+          options <- data.frame()
+          for (i in 1:length(changes)) {
+            newChosen <- chosen
+            newChosen[l] <- changes[i]
+            options <- rbind(options, getPressures(TF, symSet, newChosen)[ndims - l + 1,])
           }
-          evalStr <- paste(evalStr, ", ])", sep = "")
-          newHexId <- eval(parse(text = evalStr))
-          g <- add.edges(g, c(hexId,newHexId), weight = c(-linePressure), line = l)
+          newChosen <- chosen
+          # option with maximum positive pressure
+          choices <- options[options[,cName] == max(options[, cName]), "Choice"]
+          for (choice in choices) {
+            choicePressure <- options[options$Choice == choice, cName]
+            if (choicePressure > 0) {
+              newChosen[l] <- choice
+              evalStr <- "rownames(orderedTF[orderedTF[,1] == newChosen[1]"
+              for (c in 2:ndims) {
+                evalStr <- paste(evalStr, " & orderedTF[,", c, "] == newChosen[", c, "]", sep = "")
+              }
+              evalStr <- paste(evalStr, ", ])", sep = "")
+              newHexId <- eval(parse(text = evalStr))
+              g <- add.edges(g, c(hexId,newHexId), weight = c(choicePressure), line = l)
+            }
+          }
         }
       }
     }
@@ -507,15 +511,29 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE) {
       for (l in ndims:1) { # for each line
         linePressure <- p[ndims - l + 1, cName]
         if (linePressure < 0) {
-          newChosen <- chosen
-          newChosen[l] <- flipTaiji(newChosen, l, symSet)
-          evalStr <- "rownames(orderedTF[orderedTF$L1 == newChosen[1]"
-          for (c in 2:ndims) {
-            evalStr <- paste(evalStr, " & orderedTF$L", c, " == newChosen[", c, "]", sep = "")
+          changes <- getChanges(chosen, l, symSet)
+          options <- data.frame()
+          for (i in 1:length(changes)) {
+            newChosen <- chosen
+            newChosen[l] <- changes[i]
+            options <- rbind(options, getPressures(TF, symSet, newChosen)[ndims - l + 1,])
           }
-          evalStr <- paste(evalStr, ", ])", sep = "")
-          newHexId <- eval(parse(text = evalStr))
-          g <- add.edges(g, c(hexId,newHexId), weight = c(-linePressure), line = l)
+          # all options with positive pressure
+          choices <- options[options[,cName] > 0, "Choice"]
+          for (choice in choices) {
+            choicePressure <- options[options$Choice == choice, cName]
+            if (choicePressure > 0) {
+              newChosen <- chosen
+              newChosen[l] <- choice
+              evalStr <- "rownames(orderedTF[orderedTF[,1] == newChosen[1]"
+              for (c in 2:ndims) {
+                evalStr <- paste(evalStr, " & orderedTF[,", c, "] == newChosen[", c, "]", sep = "")
+              }
+              evalStr <- paste(evalStr, ", ])", sep = "")
+              newHexId <- eval(parse(text = evalStr))
+              g <- add.edges(g, c(hexId,newHexId), weight = c(choicePressure), line = l)
+            }
+          }
         }
       }
     }
@@ -523,13 +541,13 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE) {
   return(addWidth(g))
 }
 
-getPageRanked <- function(g, doPlot = TRUE, layout = layout.auto(g)) {
+getPageRanked <- function(g, doPlot = TRUE, layoutFunc = layout.auto) {
   pr <- page.rank(g)$vector
   # plot.igraph(g, layout=layout, vertex.size=map(pr, c(10,15)), vertex.color=map(pr, c(10,15)), 
   #      vertex.label.font = 2, vertex.label.cex = 1.1, vertex.label.dist = 1.5,
   #      edge.arrow.size = 1,
   #      edge.width = E(g)$width)
-  eqarrowPlot(g, layout.auto(g), edge.arrow.size=E(g)$width/8,
+  eqarrowPlot(g, layoutFunc(g), edge.arrow.size=E(g)$width/8,
               edge.width=E(g)$width, edge.label = NA, pr = pr)
   return(pr)
 }
@@ -589,7 +607,9 @@ analyseSubgraph <- function(decomp, rank, interactive = TRUE, getResult = FALSE,
   edges <- decomp$dgEdges[[ind]]
   origRows <- nrow(edges)
   if (length(urlTemplate) > 0 & origRows > 0) {
-    edges$url <- paste(urlTemplate[1], edges$V1, urlTemplate[2], edges$V2, urlTemplate[3], sep = "")
+    id1 <- regmatches(edges$V1, regexpr("[0-9]+", edges$V1, perl=TRUE))
+    id2 <- regmatches(edges$V2, regexpr("[0-9]+", edges$V2, perl=TRUE))
+    edges$url <- paste(urlTemplate[1], id1, urlTemplate[2], id2, urlTemplate[3], sep = "")
   }
   if (interactive) {
     print(names(decomp$dgVertices[[ind]]))

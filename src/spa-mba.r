@@ -1,76 +1,84 @@
+# SPA-MBA
 
 #### Initialise ####
 rm(list=ls())
 setwd("~/Documents/Projects/SPA/") # edit to suit your environment
 source("./src/spa-utils.r")
+source("./src/spa-utils-loaders.r")
 
-loadMB <- function() {
-  out <- read.csv(file = "./data/myers-briggs-dataset-01.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
-  out$D1 <- as.factor(out$D1)
-  out$D2 <- as.factor(out$D2)
-  out$D3 <- factor(out$D3, labels = c("F", "T"))
-  out$D4 <- as.factor(out$D4)
-  out$PPTL <- as.double(out$PPTL)
-  out$PPTU <- as.double(out$PPTU)
-  out$PPT <- as.double(out$PPT - 0.26 / 16)
-  out$Pair <- as.integer(out$Pair)
-  # Assemble results
-  out <- out %>%
-    mutate(LUP = (PPTL + PPTU) / 2 + 1 / 16) %>%
-    mutate(AP = (LUP + PPT) / 2) %>% # don't use PMT, its only an estimate
-    mutate(APN = (AP - min(AP)) / (max(AP) - min(AP))) %>%
-    mutate(Num = rownames(out)) %>%
-    select(Num, 1:7, AP, APN)
-  rownames(out) <- out$Type
-  # Add group id column
-  out$Grp <- rep(NA, nrow(out))
-  out[out$D2 == "N" & out$D4 == "J", ]$Grp <- 1
-  out[out$D3 == "T" & out$D4 == "P", ]$Grp <- 2
-  out[out$D3 == "F" & out$D4 == "P", ]$Grp <- 3
-  out[out$D2 == "S" & out$D4 == "J", ]$Grp <- 4
-  out$Grp <- as.factor(out$Grp)
-  return(out)
-}
+loaded <- loadMB()
 
-MB <- loadMB()
+TF <- loaded$TF
+symSet <- loaded$symSet
 
-MBsymbolSet <- data.frame(c1 = c("X", "_", "I", "E"),
-                          c2 = c("X", "_", "N", "S"),
-                          c3 = c("X", "_", "F", "T"),
-                          c4 = c("X", "_", "P", "J") )
+# here we select: 
+#   PPT for both females and males
+#   PPF for females
+#   PPM for males
+TF <- select(TF, D1, D2, D3, D4, PP = PPM)
+str(TF)
 
-MBS <- getScenarios(MB, MBsymbolSet, cname = "AP", nSkip = 3)
-
-# sortedPlot(MBS, "GroupAP", datatype = "Adaptation Scenarios")
-# 
-# # Plot of the sorted spectrum of choice difference values for all adaptation scenarios. Diff = yin% - yang%
-# sortedPlot(MBS, "Diff1", datatype = "Adaptation Scenarios")
-# 
-# # Plot of the sorted spectrum of demographic pressure values for all adaptation scenarios. DP = GroupAP * Diff 
-# sortedPlot(MBS, "DP1", datatype = "Adaptation Scenarios")
-# 
-# # Plot of the sorted spectrum of TP values for all adaptation scenarios. TP = Diff / GroupAP
-# sortedPlot(MBS, "TP1", datatype = "Adaptation Scenarios")
-# 
-# # What are the most discouraged and encouraged adaptations, with the highest absolute choice difference?
-# head(MBS[order(-abs(MBS$Diff1)), ])
-# 
-# # What are the adaptations with the least choice difference?
-# head(MBS[order(abs(MBS$Diff1)), ])
-# 
-# # What are the adaptations with the most targeted pressure?
-# head(MBS[order(-abs(MBS$TP1)), ])
-# 
-# # What are the adaptations with the least targeted pressure?
-# head(MBS[order(abs(MBS$TP1)), ])
+summary(TF$PP)
 
 
-# getPath works differently because the parameter symbols are not unique, i.e. D1 = "A" & D2 = "A" is possible.
+# TF types sorted by prevalence
+TF[order(TF$PP), ]
 
-getPath(MBS, c("1,E", "3,F", "4,J", "2,N"), MBsymbolSet)
+# Plot of the sorted spectrum of prevalence values for all types. AP = %ofPop.
+sortedPlot(TF, "PP", ptsize = 3, datatype = "Types")
 
-getPath(MBS, c("1,E", "3,F", "4,J", "2,N", "1,I"), MBsymbolSet)
+g.max <- mkGraph(TF, symSet, onlyMax = TRUE)
 
-paths <- getAllPaths(MBS, MBsymbolSet)
+pr <- getPageRanked(g.max, layout = layout_with_graphopt)
 
-paths[1:20,]
+g.full <- mkGraph(TF, symSet)
+
+pr <- getPageRanked(g.full)
+
+# adjust the percentile value until all nodes are simply connected
+# PPT use 0.83
+# PPF use 0.843
+# PPM use 0.901
+g <- trimGraph(g.full, percentile = 0.901)
+
+pr <- getPageRanked(g)
+
+# adjust the percentile value until there are several clusters with minimal isolated nodes (0.359)
+# PPT use 0.7
+# PPF use 0.7
+# PPM use 0.7
+g <- trimGraph(g.full, percentile = 0.7)
+
+pr <- getPageRanked(g)
+
+decomp <- getDecomposition(g)
+
+analyseSubgraph(decomp, rank = 1, pr = pr)
+analyseSubgraph(decomp, rank = 2, pr = pr)
+analyseSubgraph(decomp, rank = 3, pr = pr)
+
+# adjust the percentile value until there are several clusters with minimal isolated nodes (0.358)
+# PPT use 0.6
+# PPF use 0.6
+# PPM use 0.6
+g <- trimGraph(g.full, percentile = 0.6)
+
+pr <- getPageRanked(g)
+
+decomp <- getDecomposition(g)
+
+analyseSubgraph(decomp, rank = 1, pr = pr)
+analyseSubgraph(decomp, rank = 2, pr = pr)
+analyseSubgraph(decomp, rank = 3, pr = pr)
+analyseSubgraph(decomp, rank = 4, pr = pr)
+analyseSubgraph(decomp, rank = 5, pr = pr)
+
+
+analyseAllSubgraphs(decomp, pr = pr)
+
+# Interactive step through
+analyseAllSubgraphs(decomp, interactive = TRUE, pr = pr)
+
+
+
+

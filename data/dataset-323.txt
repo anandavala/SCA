@@ -1,7 +1,0 @@
-This is a test dataset:
-
-There are three dimensions with (3, 2, 3) states giving a total of (3 * 2 * 3 = 18) types.
-
-There is percentage prevalence data for each type. Summing to 100% for all types.
-
-
