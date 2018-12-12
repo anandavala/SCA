@@ -9,19 +9,19 @@ source("./src/spa-utils-loaders.r")
 loaded <- loadMB()
 
 TF <- loaded$TF
-rownames(TF) <- paste(TF$Type, TF$Name, sep = " - ")
 symSet <- loaded$symSet
 
 # compute differences between men and women
-TF <- mutate(PPFM = PPF - PPM, PPMF = PPM - PPF)
+TF <- mutate(TF, PPFM = PPF - PPM, PPMF = PPM - PPF)
+rownames(TF) <- paste(TF$Type, TF$Name, sep = " - ")
 
 # here we select: 
 #   PPT for both females and males
 #   PPF for females
 #   PPM for males
-#   PPFM for males
-#   PPM for males
-TF <- select(TF, D1, D2, D3, D4, PP = PPF)
+#   PPFM for females - males
+#   PPMF for males - females
+TF <- select(TF, D1, D2, D3, D4, PP = PPM)
 str(TF)
 
 summary(TF$PP)
@@ -54,14 +54,14 @@ pr <- getPageRanked(g.full.sim, layout = layout_with_gem)
 # PPT use 0.83
 # PPF use 0.843
 # PPM use 0.901
-g <- trimGraph(g.full.diff, percentile = 0.843)
+g <- trimGraph(g.full.diff, percentile = 0.901)
 pr <- getPageRanked(g, layout = layout_with_gem)
 
 # using similarity
 # PPT use 0.9753
 # PPF use 0.9987
-# PPM use 1.0, the min connected is the full graph
-g <- trimGraph(g.full.sim, percentile = 0.9987)
+# PPM use 0.99256
+g <- trimGraph(g.full.sim, percentile = 0.99256)
 pr <- getPageRanked(g, layout = layout_with_gem)
 
 # adjust the percentile value until there are several clusters with minimal isolated nodes (0.359)

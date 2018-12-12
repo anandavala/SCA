@@ -626,7 +626,7 @@ eqarrowPlot <- function(graph, layout, edge.lty=rep(1, ecount(graph)),
     plot.igraph(graph2, edge.lty=edge.lty[e], edge.arrow.size=edge.arrow.size[e],
          edge.width=edge.width[e],
          edge.label = edge.label[e],
-         edge.color = edge.color[e],
+         edge.color = "grey", # edge.color[e],
          edge.curved=edge.curved[e], layout=layout, vertex.shape="none",
          vertex.label=NA, add=TRUE, ...)
   }
