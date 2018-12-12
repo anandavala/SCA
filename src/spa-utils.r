@@ -5,6 +5,8 @@ library(ggdendro)
 library(cluster)
 library(gtools)
 library(igraph)
+library(tidyr)
+
 source("./src/map.R") # used to plot page rank results
 
 row2CharVec <- function(df, r = 1) {
@@ -131,7 +133,7 @@ num_ <- function(vec) { # vec is a vector of strings
 }
 
 # function, given a mask compute some statistics for the associated group of types
-getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cname = "PP", nSkip = 0) {
+getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cName = "PP", nSkip = 0) {
   groupAPs <- c()
   ratios <- list()
   pps <- list()
@@ -168,7 +170,7 @@ getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cname = "P
     ps <- rep(NA, nsyms)
     for (i in 1:nsyms) {
       subdfs[[i]] <- eval(parse(text = paste("tmp[[\"", as.character(symSet[2 + i, xp]), "\"]]", sep = "")))
-      ps[i] <- sum(eval(parse(text = paste("subdfs[[i]]$", cname, sep = ""))))
+      ps[i] <- sum(eval(parse(text = paste("subdfs[[i]]$", cName, sep = ""))))
     }
     sumps <- sum(ps)
     pp <- rep(NA, nsyms)
@@ -364,8 +366,28 @@ standardiseLevels <- function(column) {
   return(gsub("[^A-Za-z0-9]", "_", levels(column)))
 }
 
-# build symbolset from data frame
-getSymbolSet <- function(Data) {
+getSymSetFromTF <- function(tf, symCols) {
+  prefix <- c("X", "_")
+  maxLvls <- 0
+  for (c in symCols) {
+    lvlLen <- length(levels(tf[,c]))
+    if (lvlLen > maxLvls) maxLvls <- lvlLen
+  }
+  symSet <- data.frame(c1 = rep(NA, maxLvls + 2))
+  for (c in symCols) {
+    lvls <- levels(tf[,c])
+    syms <- c(prefix, lvls)
+    if (length(syms) < maxLvls + 2) {
+      syms <- c(syms, rep(NA, maxLvls + 2 - length(syms)))
+    }
+    eval(parse(text = paste("symSet$c", c, " <- syms", sep = "")))
+  }
+  colnames(symSet) <- colnames(tf)[symCols]
+  return(symSet)
+}
+
+# build symbolset from data about individuals
+getSymSetFromData <- function(Data) {
   prefix <- c("X", "_")
   maxLvls <- 0
   for (c in 1:ncol(Data)) {
@@ -387,7 +409,7 @@ getSymbolSet <- function(Data) {
 
 
 # build type frequency table
-getTypeFreqs <- function(Data, dims, symSet) {
+getTypeFreqs <- function(Data, symSet, dims = 1:ncol(Data)) {
   types <- getTypes(symSet)
   colnames(types) <- colnames(Data)[dims]
   # collect count stats for types in the population
@@ -441,9 +463,11 @@ getChanges <- function(chosen, l, symSet) {
 }
 
 addWidth <- function(g) {
-  minW <- min(E(g)$weight)
-  maxW <- max(E(g)$weight)
-  E(g)$width <- (E(g)$weight - minW) / (maxW - minW) * 9 + 1
+  if (!is.null(E(g)$weight)) {
+    minW <- min(E(g)$weight)
+    maxW <- max(E(g)$weight)
+    E(g)$width <- (E(g)$weight - minW) / (maxW - minW) * 9 + 1
+  }
   return(g)
 }
 
@@ -463,18 +487,21 @@ getAllLinePressures <- function(tf, symSet) {
 # with onlyMax == TRUE we only consider the lines of a hexagram with maximum pressure
 # the former is better for finding all pressured changes, 
 # but the latter is better for visualising the overall structure of connections
-mkGraph <- function(tf, symSet, onlyMax = FALSE) {
+mkGraph <- function(tf, symSet, onlyMax = FALSE, useSimilarity = FALSE) {
   ndims <- ncol(symSet)
   orderedTF <- tf[order(tf$PP), ]
-  cName <- "ChDiff"
+  cName <- "ChDiff" # need to fix similarity code if this is changed because it is hardwired there
   g<- graph.empty(nrow(orderedTF), directed = TRUE)
   V(g)$name <- rownames(tf)
-  maxP <- max(getAllLinePressures(TF, symSet)[,cName])
+  maxChoicePressure <- orderedTF$PP[length(orderedTF$PP)] - orderedTF$PP[1]
   for (i in 1:nrow(orderedTF)) {
     hexId <- rownames(orderedTF)[i]
     chosen <- row2CharVec(orderedTF[i,1:ndims])
     p <- getPressures(orderedTF, symSet, chosen)
     rownames(p) <- ndims:1
+    # optionally switch to using similarity instead of ChDiff
+    # it would still be called ChDiff but would measure similarity instead
+    if (useSimilarity) p$ChDiff <- (maxChoicePressure - abs(p$ChDiff)) * sign(p$ChDiff)
     if (onlyMax) {
       minp <- p[p$ChDiff == min(p$ChDiff),]
       for (r in 1:nrow(minp)) { # for each maximum pressure line
@@ -494,6 +521,7 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE) {
           for (choice in choices) {
             choicePressure <- options[options$Choice == choice, cName]
             if (choicePressure > 0) {
+              if (useSimilarity) choicePressure <- maxChoicePressure - choicePressure
               newChosen[l] <- choice
               evalStr <- "rownames(orderedTF[orderedTF[,1] == newChosen[1]"
               for (c in 2:ndims) {
@@ -523,6 +551,7 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE) {
           for (choice in choices) {
             choicePressure <- options[options$Choice == choice, cName]
             if (choicePressure > 0) {
+              if (useSimilarity) choicePressure <- exp((maxChoicePressure - choicePressure)) / 1e6
               newChosen <- chosen
               newChosen[l] <- choice
               evalStr <- "rownames(orderedTF[orderedTF[,1] == newChosen[1]"
@@ -538,6 +567,8 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE) {
       }
     }
   }
+  if (useSimilarity) E(g)$color <- rep("#8fb7b4", ecount(g))
+  else E(g)$color <- rep("#a377b2", ecount(g))
   return(addWidth(g))
 }
 
@@ -547,8 +578,10 @@ getPageRanked <- function(g, doPlot = TRUE, layoutFunc = layout.auto) {
   #      vertex.label.font = 2, vertex.label.cex = 1.1, vertex.label.dist = 1.5,
   #      edge.arrow.size = 1,
   #      edge.width = E(g)$width)
-  eqarrowPlot(g, layoutFunc(g), edge.arrow.size=E(g)$width/8,
-              edge.width=E(g)$width, edge.label = NA, pr = pr)
+  if (!is.null(E(g)$weight)) eqarrowPlot(g, layoutFunc(g), edge.arrow.size=E(g)$width/8,
+              edge.width=E(g)$width, edge.color=E(g)$color, edge.label = NA, pr = pr)
+  else eqarrowPlot(g, layoutFunc(g), edge.arrow.size=1,
+                                         edge.width=1, edge.label = NA, pr = pr)
   return(pr)
 }
 
@@ -560,15 +593,16 @@ getDecomposition <- function(g) {
   for (i in 1:length(dg)) {
     tmpg <- dg[[i]]
     edges <- as.data.frame(get.edgelist(tmpg))
-    edges$line <- E(tmpg)$line
-    edges$weight <- E(tmpg)$weight
-    edges <- edges[order(-edges$weight),]
-    dgEdges <- append(dgEdges, list(edges))
     dgVertices <- append(dgVertices, list(V(tmpg)))
     if (nrow(edges) > 0) {
+      edges$line <- E(tmpg)$line
+      edges$weight <- E(tmpg)$weight
+      edges <- edges[order(-edges$weight),]
+      dgEdges <- append(dgEdges, list(edges))
       dgMaxPressure <- append(dgMaxPressure, list(edges[1, "weight"]))
     }
     else {
+      dgEdges <- append(dgEdges, list(edges))
       dgMaxPressure <- append(dgMaxPressure, list(0))
     }
   }
@@ -580,6 +614,7 @@ getDecomposition <- function(g) {
 eqarrowPlot <- function(graph, layout, edge.lty=rep(1, ecount(graph)),
                         edge.arrow.size=rep(1, ecount(graph)),
                         edge.width=rep(1, ecount(graph)),
+                        edge.color=rep("grey", ecount(graph)),
                         edge.label=NA,
                         vertex.shape="circle",
                         edge.curved=autocurve.edges(graph), pr, ...) {
@@ -591,6 +626,7 @@ eqarrowPlot <- function(graph, layout, edge.lty=rep(1, ecount(graph)),
     plot.igraph(graph2, edge.lty=edge.lty[e], edge.arrow.size=edge.arrow.size[e],
          edge.width=edge.width[e],
          edge.label = edge.label[e],
+         edge.color = edge.color[e],
          edge.curved=edge.curved[e], layout=layout, vertex.shape="none",
          vertex.label=NA, add=TRUE, ...)
   }
@@ -622,7 +658,7 @@ analyseSubgraph <- function(decomp, rank, interactive = TRUE, getResult = FALSE,
     # plot.igraph(tmpg, layout=layout, vertex.size=mapResf[V(tmpg)$name], vertex.color=mapResf[V(tmpg)$name], vertex.label.font = 2, vertex.label.cex = 1, vertex.label.dist = 1.5,
     #      edge.arrow.size = 2, edge.label = sprintf("%d\n%0.2f", E(tmpg)$line, E(tmpg)$weight), edge.width = E(tmpg)$width)
     eqarrowPlot(tmpg, layout = layoutFunc(tmpg), edge.arrow.size=E(tmpg)$width/6,
-                edge.width=E(tmpg)$width, edge.label = sprintf("%d\n%0.2f", E(tmpg)$line, E(tmpg)$weight), pr = pr)
+                edge.width=E(tmpg)$width, edge.color=E(tmpg)$color, edge.label = sprintf("%d\n%0.2f", E(tmpg)$line, E(tmpg)$weight), pr = pr)
   }
   if (getResult) return(edges)
 }
@@ -635,15 +671,18 @@ analyseAllSubgraphs <- function(decomp, interactive = FALSE, pr, urlTemplate = c
     out <- rbind(out, analyseSubgraph(decomp, i, interactive, TRUE, pr, urlTemplate))
     if (interactive) invisible(readline(prompt="Press [enter] to continue and esc to quit"))
   }
-  out <- out[order(-out$weight),]
+  if (nrow(out) > 0) out <- out[order(-out$weight),]
   rownames(out) <- NULL
   return(out)
 }
 
 # remove the sub-threshold edges from the graph for better visualisation...
 trimGraph <- function(g, percentile) {
-  maxPressure <- max(E(g)$weight)
-  threshold <- maxPressure * (1 - percentile)
-  outG <- delete.edges(g, which(E(g)$weight < threshold))
-  return(addWidth(outG))
+  if (!is.null(E(g)$weight)) {
+    maxPressure <- max(E(g)$weight)
+    threshold <- maxPressure * (1 - percentile)
+    outG <- delete.edges(g, which(E(g)$weight < threshold))
+    return(addWidth(outG))
+  }
+  return(g)
 }

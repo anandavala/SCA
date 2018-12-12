@@ -11,6 +11,7 @@ source("./src/spa-utils-loaders.r")
 # so that we can generate links to more information about each component of the reading.
 urlTemplate <- c("https://ichingdb.pythonanywhere.com/ichingdb/", "/", "/")
 
+# this is where the hexagrams are randomly generated
 loaded <- loadIChing()
 
 TF <- loaded$TF
@@ -29,11 +30,14 @@ sortedPlot(TF, "PP", ptsize = 3, datatype = "Types")
 g.max <- mkGraph(TF, symSet, onlyMax = TRUE)
 pr <- getPageRanked(g.max)
 
+# g.max.sim <- mkGraph(TF, symSet, onlyMax = TRUE, useSimilarity = TRUE)
+# pr <- getPageRanked(g.max.sim)
+
 decomp <- getDecomposition(g.max)
 analyseSubgraph(decomp, rank = 1, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
-analyseSubgraph(decomp, rank = 2, pr = pr, urlTemplate = urlTemplate)
-analyseSubgraph(decomp, rank = 3, pr = pr, urlTemplate = urlTemplate)
-analyseSubgraph(decomp, rank = 4, pr = pr, urlTemplate = urlTemplate)
+analyseSubgraph(decomp, rank = 2, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
+analyseSubgraph(decomp, rank = 3, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
+analyseSubgraph(decomp, rank = 4, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
 analyseSubgraph(decomp, rank = 5, pr = pr, urlTemplate = urlTemplate)
 analyseSubgraph(decomp, rank = 6, pr = pr, urlTemplate = urlTemplate)
 analyseSubgraph(decomp, rank = 7, pr = pr, urlTemplate = urlTemplate)
@@ -47,12 +51,12 @@ analyseSubgraph(decomp, rank = 11, pr = pr, urlTemplate = urlTemplate)
 # Examine all paths between nodes
 g.full <- mkGraph(TF, symSet)
 
-pr <- getPageRanked(g.full)
+pr <- getPageRanked(g.full, layoutFunc = layout_with_gem)
 
 # keep only the top percentile
-g <- trimGraph(g.full, percentile = 0.4)
+g <- trimGraph(g.full, percentile = 0.5)
 
-pr <- getPageRanked(g)
+pr <- getPageRanked(g, layoutFunc = layout_with_graphopt)
 
 decomp <- getDecomposition(g)
 

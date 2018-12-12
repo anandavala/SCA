@@ -85,7 +85,7 @@ analyseAllSubgraphs(decomp, interactive = TRUE, pr = pr)
 # ggdendrogram(hc)
 # 
 # 
-# scenarios <- getScenarios(TF, symSet, cname = "PP", nSkip = 0)
+# scenarios <- getScenarios(TF, symSet, cName = "PP", nSkip = 0)
 # 
 # getPath(scenarios, c("1,b", "2,u", "3,g", "4,t", "5,t"), symSet)
 # 

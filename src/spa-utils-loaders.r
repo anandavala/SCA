@@ -57,14 +57,14 @@ loadCRX <- function() {
   # omit NAs for now but eventually have an NA category for them
   Data <- na.omit(Data)
   
-  symSet <- getSymbolSet(Data)
+  symSet <- getSymSetFromData(Data)
 
   # focus on relevant data
   dims <- c(1, 2, 3, 4, 5, 8) # columns of interest
   symSet <- symSet[,dims] # strip down to relevant columns
   symSet <- symSet[rowSums(is.na(symSet)) != ncol(symSet), ] # strip rows with all NAs
 
-  TF <- getTypeFreqs(Data, dims, symSet)
+  TF <- getTypeFreqs(Data, symSet, dims)
   
   return(list(TF = TF, symSet = symSet))
 }
@@ -91,7 +91,7 @@ loadCrime <- function() {
   
   levels(Data[,"Community.Area"]) <- DBLLETTERS[1:length(levels(Data[,"Community.Area"]))]
   
-  symSet <- getSymbolSet(Data)
+  symSet <- getSymSetFromData(Data)
   
   # focus on relevant data
   dims <- c(2, 5, 6) # columns of interest
@@ -103,58 +103,58 @@ loadCrime <- function() {
   # # choose which year to analyse
   # Data <- Data.years[["2015"]]
   
-  TF <- getTypeFreqs(Data, dims, symSet)
+  TF <- getTypeFreqs(Data, symSet, dims)
   return(list(TF = TF, symSet = symSet))
 }
 
+getHexagrams <- function(n = 10000, asFactor = TRUE) {
+  out <- data.frame(matrix(NA, nrow=n, ncol=6))
+  lines <- rep(0, 6)
+  for (r in 1:n) {
+    for (l in 1:6) {
+      lines[l] <- as.integer(sample(c(0,1), 1, replace = TRUE))
+    }
+    out[r,] <- lines
+  }
+  colnames(out) <- c("L1", "L2", "L3", "L4", "L5", "L6")
+  if (asFactor) {
+    out$L1 <- factor(out$L1)
+    out$L2 <- factor(out$L2)
+    out$L3 <- factor(out$L3)
+    out$L4 <- factor(out$L4)
+    out$L5 <- factor(out$L5)
+    out$L6 <- factor(out$L6)
+    lineSymbols <- c("yin", "yang")
+    levels(out$L1) <- lineSymbols
+    levels(out$L2) <- lineSymbols
+    levels(out$L3) <- lineSymbols
+    levels(out$L4) <- lineSymbols
+    levels(out$L5) <- lineSymbols
+    levels(out$L6) <- lineSymbols
+  }
+  return(out)
+}
 
 loadIChing <- function() {
   # randomly generate n hexagrams
-  getHexagrams <- function(n = 10000, asFactor = TRUE) {
-    out <- data.frame(matrix(NA, nrow=n, ncol=6))
-    lines <- rep(0, 6)
-    for (r in 1:n) {
-      for (l in 1:6) {
-        lines[l] <- as.integer(sample(c(0,1), 1, replace = TRUE))
-      }
-      out[r,] <- lines
-    }
-    colnames(out) <- c("L1", "L2", "L3", "L4", "L5", "L6")
-    if (asFactor) {
-      out$L1 <- factor(out$L1)
-      out$L2 <- factor(out$L2)
-      out$L3 <- factor(out$L3)
-      out$L4 <- factor(out$L4)
-      out$L5 <- factor(out$L5)
-      out$L6 <- factor(out$L6)
-      lineSymbols <- c("yin", "yang")
-      levels(out$L1) <- lineSymbols
-      levels(out$L2) <- lineSymbols
-      levels(out$L3) <- lineSymbols
-      levels(out$L4) <- lineSymbols
-      levels(out$L5) <- lineSymbols
-      levels(out$L6) <- lineSymbols
-    }
-    return(out)
-  }
-  
   # 10,000 hexagrams (any less and there is aliasing)
   seed <- as.numeric(Sys.time())
   print(paste("Seed = ", seed, sep = ""))
   set.seed(seed)
   Data <- getHexagrams(10000)
 
-  symSet <- getSymbolSet(Data)
+  symSet <- getSymSetFromData(Data)
   
   # focus on relevant data
   dims <- c(1:6) # columns of interest
   symSet <- symSet[,dims] # strip down to relevant columns
   symSet <- symSet[rowSums(is.na(symSet)) != ncol(symSet), ] # strip rows with all NAs
   
-  TF <- getTypeFreqs(Data, dims, symSet)
+  TF <- getTypeFreqs(Data, symSet, dims)
   # rownames(TF) <- c(2, 24, 7, 19, 15, 36, 46, 11, 16, 51, 40, 54, 62, 55, 32, 34, 8, 3, 29, 60, 39, 63, 48, 5, 45, 17, 47, 58, 31, 49, 28, 43, 23, 27, 4, 41, 52, 22, 18, 26, 35, 21, 64, 38, 56, 30, 50, 14, 20, 42, 59, 61, 53, 37, 57, 9, 12, 25, 6, 10, 33, 13, 44, 1)
   labels = c("1 Force", "2 Field", "3 Sprouting", "4 Enveloping", "5 Attending", "6 Dispute", "7 Legions", "8 Grouping", "9 Small Accumulates", "10 Treading", "11 Pervading", "12 Obstruction", "13 Harmonising People", "14 Great Being", "15 Humbling", "16 Providing For", "17 Following", "18 Corruption", "19 Nearing", "20 Viewing", "21 Biting Through", "22 Adorning", "23 Stripping", "24 Returning", "25 Disentangling", "26 Great Accumulates", "27 Jaws", "28 Great Traverses", "29 Pit", "30 Radiance", "31 Conjoining", "32 Persevering", "33 Retiring", "34 Great Invigorating", "35 Flourishing", "36 Brightness Hiding", "37 Dwelling People", "38 Divergence", "39 Limping", "40 Deliverance", "41 Diminishing", "42 Augmenting", "43 Deciding", "44 Coupling", "45 Great Works", "46 Ascending", "47 Confining", "48 The Well", "49 Skinning", "50 Vessel", "51 Shake", "52 Bound", "53 Gradual Advance", "54 Marrying the Maiden", "55 Abounding", "56 Sojourning", "57 Lady of Fates", "58 Open Expression", "59 Dispersing", "60 Articulating", "61 Centring", "62 Small Traverses", "63 Already Crossing", "64 Not Yet Crossing")
   b2IC = c(2, 24, 7, 19, 15, 36, 46, 11, 16, 51, 40, 54, 62, 55, 32, 34, 8, 3, 29, 60, 39, 63, 48, 5, 45, 17, 47, 58, 31, 49, 28, 43, 23, 27, 4, 41, 52, 22, 18, 26, 35, 21, 64, 38, 56, 30, 50, 14, 20, 42, 59, 61, 53, 37, 57, 9, 12, 25, 6, 10, 33, 13, 44, 1)
   rownames(TF) <- labels[b2IC]
   return(list(TF = TF, symSet = symSet))
 }
+

@@ -1,4 +1,3 @@
-# SPA-MBA
 
 #### Initialise ####
 rm(list=ls())
@@ -6,25 +5,42 @@ setwd("~/Documents/Projects/SPA/") # edit to suit your environment
 source("./src/spa-utils.r")
 source("./src/spa-utils-loaders.r")
 
-loaded <- loadMB()
+Data <- read.table("./data/IPLORD/iplord_public_2018_10000.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
+# Data <- read.table("./data/IPLORD/iplord_public_2018.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
+colnames(Data)
+Data$cleanname <- factor(Data$cleanname)
+Data <- select(Data, year, cleanname, p_chemistry_filed, p_electrical_filed, p_instruments_filed, p_mechanical_filed, p_others_filed)
 
-TF <- loaded$TF
-rownames(TF) <- paste(TF$Type, TF$Name, sep = " - ")
-symSet <- loaded$symSet
+# summary(Data$p_chemistry_filed)
+# summary(Data$p_electrical_filed)
+# summary(Data$p_instruments_filed)
+# summary(Data$p_mechanical_filed)
+# summary(Data$p_others_filed)
 
-# compute differences between men and women
-TF <- mutate(PPFM = PPF - PPM, PPMF = PPM - PPF)
+# convert numberic to binned ordinal
+# Data$p_chemistry_filed <- n2bf(Data$p_chemistry_filed, 3)
 
-# here we select: 
-#   PPT for both females and males
-#   PPF for females
-#   PPM for males
-#   PPFM for males
-#   PPM for males
-TF <- select(TF, D1, D2, D3, D4, PP = PPF)
-str(TF)
 
-summary(TF$PP)
+Data.years <- split(Data, Data$year)
+for (i in 1:length(Data.years)) {
+  Data.years[[i]] <- select(Data.years[[i]], -year)
+  Data.years[[i]] <- gather(Data.years[[i]], type, PP, p_chemistry_filed:p_others_filed, factor_key=TRUE)
+  Data.years[[i]]$PP <- Data.years[[i]]$PP / sum(Data.years[[i]]$PP, na.rm = TRUE) * 100
+}
+Data.years$'2012'
+sum(Data.years$'2012'$PP, na.rm = TRUE)
+
+colnames(Data.years$'2012')
+
+str(Data.years$'2012')
+
+TF <- Data.years$'2012'
+
+# getSymSetFromTF
+symSet <- getSymSetFromTF(TF, c(1,2))
+
+# replace NA with 0
+
 
 # TF types sorted by prevalence
 TF[order(TF$PP), ]
@@ -127,7 +143,5 @@ analyseAllSubgraphs(decomp.diff, interactive = TRUE, pr = pr.diff)
 analyseAllSubgraphs(decomp.sim, pr = pr.sim)
 # Interactive step through
 analyseAllSubgraphs(decomp.sim, interactive = TRUE, pr = pr.sim)
-
-
 
 
