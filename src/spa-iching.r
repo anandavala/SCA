@@ -56,7 +56,7 @@ pr <- getPageRanked(g.full, layoutFunc = layout_with_gem)
 # keep only the top percentile
 g <- trimGraph(g.full, percentile = 0.5)
 
-pr <- getPageRanked(g, layoutFunc = layout_with_graphopt)
+pr <- getPageRanked(g, layoutFunc = layout_with_fr)
 
 decomp <- getDecomposition(g)
 

@@ -10,11 +10,16 @@ library(tidyr)
 source("./src/map.R") # used to plot page rank results
 
 row2CharVec <- function(df, r = 1) {
-  out <- rep("", ncol(df))
-  for (c in 1:ncol(df)) {
-    out[c] <- as.character(df[r, c])
+  if (!is.null(ncol(df))) {
+    if (ncol(df) > 0) {
+      out <- rep("", ncol(df))
+      for (c in 1:ncol(df)) {
+        out[c] <- as.character(df[r, c])
+      }
+      return(out)
+    }
   }
-  return(out)
+  return(as.character(df))
 }
 
 # create a large set of double lettered labels
@@ -83,6 +88,7 @@ sortedPlot <- function(df, sortby, lblsize = NULL, datatype = "", ylabel = "", p
 }
 
 numChar <- function(vec, chr) { # vec is vector of characters
+  if (length(vec) == 0) return(0)
   count <- 0
   for (i in 1:length(vec)) {
     if (vec[i] == chr) count <- count + 1
@@ -94,6 +100,17 @@ numX <- function(vec) { # vec is vector of characters
   return(numChar(vec, "X"))
 }
 
+numCX <- function(vec) { # vec is vector of characters and the X is in complex form, i.e. "A>X"
+  numxs <- 0
+  for (p in seq(length(vec))) {
+    subVec <- strsplit(vec[p], split = ">")[[1]]
+    if (length(subVec) == 2 & subVec[2] == "X") {
+      numxs <- numxs + 1
+    }
+  }
+  return(numxs)
+}
+
 # return the row number for a given symbol within a given dimension
 getRowOfParam <- function(s, colNum, symSet) {
   for (r in 3:sum(!is.na(symSet[,colNum]))) {
@@ -102,8 +119,21 @@ getRowOfParam <- function(s, colNum, symSet) {
   return(0)
 }
 
+complexSymSet <- function(symSet) {
+  maxSyms <- nrow(symSet) - 2
+  newSymSet <- data.frame(matrix(NA, nrow = maxSyms * 2 + 1, ncol = ncol(symSet)))
+  for (c in seq(ncol(symSet))) {
+    totalSyms <- sum(!is.na(symSet[,c]))
+    availSyms <- symSet[3:totalSyms, c]
+    nsyms <- totalSyms - 2
+    newSymSet[seq(nsyms), c] <- paste(availSyms, rep("X", nsyms), sep = ">")
+    newSymSet[(nsyms+1):(2*nsyms+1), c] <- as.character(as.vector(symSet[2:totalSyms, c]))
+  }
+  return(newSymSet)
+}
 
 getMasks <- function(symSet, masks = c(), str = rep("", ncol(symSet)), iter = 1, constraints = rep("", ncol(symSet))) {
+  if (iter == 1) symSet <- complexSymSet(symSet)
   if (constraints[iter] != "") {
     r <- c(1)
     syms <- c(constraints[iter])
@@ -115,7 +145,7 @@ getMasks <- function(symSet, masks = c(), str = rep("", ncol(symSet)), iter = 1,
   for (s in r) {
     str[iter] <- sprintf("%s", syms[s])
     if (iter < ncol(symSet)) masks <- getMasks(symSet, masks, str, iter + 1, constraints = constraints)
-    else if (numX(str) == 1) masks <- append(masks, paste(str, sep = "", collapse = ","))
+    else if (numCX(str) == 1) masks <- append(masks, paste(str, sep = "", collapse = ","))
   }
   return(masks)
 }
@@ -133,7 +163,7 @@ num_ <- function(vec) { # vec is a vector of strings
 }
 
 # function, given a mask compute some statistics for the associated group of types
-getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cName = "PP", nSkip = 0) {
+getScenarios <- function(df, symSet, masks = getMasks(symSet), cName = "PP", nSkip = 0) {
   groupAPs <- c()
   ratios <- list()
   pps <- list()
@@ -150,9 +180,12 @@ getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cName = "P
     for (p in 1:maxp) {
       if (p > length(params)) params[[p]] <- c(vec[p])
       else params[[p]] <- append(params[[p]], vec[p])
-      if (vec[p] == "X") {
+      subVec <- strsplit(vec[p], split = ">")[[1]]
+      if (length(subVec) == 2 & subVec[2] == "X") {
         pp <- pp[pp!=p]
         xp <- p
+        initState <- subVec[1]
+        origR <- getRowOfParam(initState, xp, symSet)
       }
       else if (vec[p] == "_") {
         pp <- pp[pp!=p]
@@ -165,30 +198,36 @@ getScenarios <- function(df, symSet = NULL, masks = getMasks(symSet), cName = "P
       }
     }
     tmp <- split(df, df[, nSkip + xp])
-    subdfs <- list()
     nsyms <- sum(!is.na(symSet[,xp])) - 2
+    syms <- as.character(as.vector(symSet[3:sum(!is.na(symSet[,xp])), xp]))
     ps <- rep(NA, nsyms)
     for (i in 1:nsyms) {
-      subdfs[[i]] <- eval(parse(text = paste("tmp[[\"", as.character(symSet[2 + i, xp]), "\"]]", sep = "")))
-      ps[i] <- sum(eval(parse(text = paste("subdfs[[i]]$", cName, sep = ""))))
+      ps[i] <- sum(eval(parse(text = paste("(tmp[[syms[i]]])$", cName, sep = ""))))
     }
     sumps <- sum(ps)
     pp <- rep(NA, nsyms)
     ratio <- rep(NA, nsyms)
     diff <- rep(NA, nsyms)
     for (i in 1:nsyms) {
-      pp[i] <- ps[i] / sumps * 100
-      ratio[i] <- ps[i] / (sumps - ps[i]) # ratio between each and the rest
-      diff[i] <- ps[i] - (sumps - ps[i]) # difference between each and the rest
+      pp[i] <- ps[i] #/ sumps * 100
+      avgOther <- mean(ps[c(-i)])
+      ratio[i] <- ps[i] / avgOther # ratio between each and the average other
+      # diff[i] <- ps[i] - avgOther # difference between each and the average other
+      diff[i] <- ps[i] - ps[origR - 2] # difference between each and the initial state
+      # TODO need to think about this!
     }
     groupAPs <- append(groupAPs, sumps)
     ratios <- append(ratios, list(ratio))
     pps <- append(pps, list(pp))
     diffs <- append(diffs, list(diff))
   }
+  num_vec <- rep(NA, length(masks))
+  for (m in seq(length(masks))) {
+    num_vec[m] <- num_(strsplit(masks[m], split = ",")[[1]])
+  }
   out <- data.frame(row.names = masks, 
                     Mask = masks,
-                    N_ = num_(masks))
+                    N_ = num_vec)
   out$Mask <- as.character(out$Mask)
   for (i in 1:maxp) {
     eval(parse(text = paste("out$D", i, " <- params[[i]]", sep = "")))
@@ -224,11 +263,11 @@ getPathOnDemand <- function(tf, choices, symSet, chosen = rep("",ncol(symSet)), 
       undef <- 0
     }
     # create a scenario set with dim c == "X" and N_ == undef
-    chosen[c] <- "X"
+    chosen[c] <- sprintf("%s>X", chosen[c])
     masks <- getMasks(symSet, constraints = chosen)
     chosen[c] <- as.character(cs[2])
     masks <- masks[num_(masks) == undef]
-    mbs <- getScenarios(tf, symSet, masks, nSkip = 0)
+    mbs <- getScenarios(tf, symSet, masks)
     mbs$Choice <- as.character(cs[2])
     mbs$ChDiff <- eval(parse(text = paste("mbs$Diff", r - 2, sep = "")))
     mbs$ChDP <- eval(parse(text = paste("mbs$DP", r - 2, sep = "")))
@@ -264,9 +303,10 @@ getPath <- function(mbs, choices, symSet, chosen = rep("",ncol(symSet)), undef =
     cs <- strsplit(choice, split = ",")[[1]]
     c <- as.integer(cs[1])
     r <- getRowOfParam(as.character(cs[2]), c, symSet)
+    origState <- chosen[c]
     if (undef < 0) {
       undef <- 0
-      chosen[c] <- "X"
+      chosen[c] <- sprintf("%s>X", origState)
       mbs <- origmbs[getMasks(symSet, constraints = chosen),]
     }
     chosen[c] <- as.character(cs[2])
@@ -274,7 +314,7 @@ getPath <- function(mbs, choices, symSet, chosen = rep("",ncol(symSet)), undef =
     mbs$ChDiff <- eval(parse(text = paste("mbs$Diff", r - 2, sep = "")))
     mbs$ChDP <- eval(parse(text = paste("mbs$DP", r - 2, sep = "")))
     mbs$ChTP <- eval(parse(text = paste("mbs$TP", r - 2, sep = "")))
-    df1 <- mbs[eval(parse(text = paste("mbs$D", c, sep = ""))) == "X" & mbs$N_ == undef, ]
+    df1 <- mbs[eval(parse(text = paste("mbs$D", c, sep = ""))) == sprintf("%s>X", origState) & mbs$N_ == undef, ]
     df1 <- select(df1, GroupAP, Choice, ChDiff, ChDP, ChTP)
     df2 <- getPath(mbs[eval(parse(text = paste("mbs$D", c, sep = ""))) == symSet[r,c], ], choices, symSet, chosen, undef - 1, FALSE, origmbs = origmbs)
     if (!is.null(df2)) df2 <- select(df2, GroupAP, Choice, ChDiff, ChDP, ChTP)
@@ -407,6 +447,18 @@ getSymSetFromData <- function(Data) {
   return(symSet)
 }
 
+# spec is a list of vectors 
+getSymSetFromSpec <- function(spec) {
+  nrows <- 0
+  for (item in spec) if (length(item) > nrows) nrows <- length(item)
+  m <- matrix(NA, nrow = nrows + 2, ncol = length(spec))
+  for (i in seq(length(spec))) {
+    len <- length(spec[[i]])
+    m[seq(len+2),i] <- c("X", "_", spec[[i]])
+  }
+  return(data.frame(m, stringsAsFactors = FALSE))
+}
+
 
 # build type frequency table
 getTypeFreqs <- function(Data, symSet, dims = 1:ncol(Data)) {
@@ -440,9 +492,15 @@ getTypeFreqs <- function(Data, symSet, dims = 1:ncol(Data)) {
 # Positive values indicate pressure to remain the same,
 # negative values indicate pressure to change.
 getPressures <- function(tf, symSet, chosen) {
-  out <- data.frame()
+  out <- list()
   for (i in ncol(symSet):1) {
-    out <- rbind(out, getPathOnDemand(tf, c(paste(i, chosen[i], sep = ",")), symSet, chosen, withTotals = FALSE))
+    tmp <- data.frame()
+    nsyms <- sum(!is.na(symSet[,i])) - 2
+    syms <- symSet[3:(nsyms+2),i]
+    for (s in syms) {
+      tmp <- rbind(tmp, getPathOnDemand(tf, c(paste(i, s, sep = ",")), symSet, chosen, withTotals = FALSE))
+    }
+    out <- append(out, list(tmp))
   }
   return(out)
 }
@@ -466,7 +524,8 @@ addWidth <- function(g) {
   if (!is.null(E(g)$weight)) {
     minW <- min(E(g)$weight)
     maxW <- max(E(g)$weight)
-    E(g)$width <- (E(g)$weight - minW) / (maxW - minW) * 9 + 1
+    if ((maxW - minW) != 0) E(g)$width <- (E(g)$weight - minW) / (maxW - minW) * 9 + 1
+    else E(g)$width <- rep(2, ecount(g))
   }
   return(g)
 }
@@ -498,69 +557,45 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE, useSimilarity = FALSE) {
     hexId <- rownames(orderedTF)[i]
     chosen <- row2CharVec(orderedTF[i,1:ndims])
     p <- getPressures(orderedTF, symSet, chosen)
-    rownames(p) <- ndims:1
+    names(p) <- ndims:1
     # optionally switch to using similarity instead of ChDiff
     # it would still be called ChDiff but would measure similarity instead
-    if (useSimilarity) p$ChDiff <- (maxChoicePressure - abs(p$ChDiff)) * sign(p$ChDiff)
-    if (onlyMax) {
-      minp <- p[p$ChDiff == min(p$ChDiff),]
-      for (r in 1:nrow(minp)) { # for each maximum pressure line
-        linePressure <- minp[r, cName]
-        if (linePressure < 0) {
-          l <- as.integer(rownames(minp)[r])
-          changes <- getChanges(chosen, l, symSet)
-          options <- data.frame()
-          for (i in 1:length(changes)) {
-            newChosen <- chosen
-            newChosen[l] <- changes[i]
-            options <- rbind(options, getPressures(TF, symSet, newChosen)[ndims - l + 1,])
-          }
-          newChosen <- chosen
-          # option with maximum positive pressure
-          choices <- options[options[,cName] == max(options[, cName]), "Choice"]
-          for (choice in choices) {
-            choicePressure <- options[options$Choice == choice, cName]
-            if (choicePressure > 0) {
-              if (useSimilarity) choicePressure <- maxChoicePressure - choicePressure
-              newChosen[l] <- choice
-              evalStr <- "rownames(orderedTF[orderedTF[,1] == newChosen[1]"
-              for (c in 2:ndims) {
-                evalStr <- paste(evalStr, " & orderedTF[,", c, "] == newChosen[", c, "]", sep = "")
-              }
-              evalStr <- paste(evalStr, ", ])", sep = "")
-              newHexId <- eval(parse(text = evalStr))
-              g <- add.edges(g, c(hexId,newHexId), weight = c(choicePressure), line = l)
-            }
-          }
-        }
+    if (useSimilarity) {
+      for (l in ndims:1) {
+        p[[as.character(l)]]$ChDiff <- exp((maxChoicePressure - abs(p[[as.character(l)]]$ChDiff))) / 10 * sign(p[[as.character(l)]]$ChDiff)
       }
     }
-    else {
-      for (l in ndims:1) { # for each line
-        linePressure <- p[ndims - l + 1, cName]
-        if (linePressure < 0) {
-          changes <- getChanges(chosen, l, symSet)
-          options <- data.frame()
-          for (i in 1:length(changes)) {
+    if (onlyMax) {
+      maxV <- c()
+      for (l in ndims:1) {
+        maxV[l] <- max(p[[as.character(l)]]$ChDiff)
+      }
+      maxV <- max(maxV)
+      for (l in ndims:1) {
+        p[[as.character(l)]] <- p[[as.character(l)]][p[[as.character(l)]]$ChDiff == maxV,]
+      }
+    }
+    for (l in ndims:1) {
+      maxp <- p[[as.character(l)]]
+      if (nrow(maxp) > 0) {
+        for (r in 1:nrow(maxp)) { # for each maximum pressure line
+          linePressure <- maxp[r, cName]
+          if (linePressure > 0) {
             newChosen <- chosen
-            newChosen[l] <- changes[i]
-            options <- rbind(options, getPressures(TF, symSet, newChosen)[ndims - l + 1,])
-          }
-          # all options with positive pressure
-          choices <- options[options[,cName] > 0, "Choice"]
-          for (choice in choices) {
-            choicePressure <- options[options$Choice == choice, cName]
-            if (choicePressure > 0) {
-              if (useSimilarity) choicePressure <- exp((maxChoicePressure - choicePressure)) / 1e6
-              newChosen <- chosen
+            # option with maximum positive pressure
+            choices <- maxp[maxp[,cName] == linePressure, "Choice"]
+            for (choice in choices) {
+              # if (useSimilarity) choicePressure <- maxChoicePressure - choicePressure
               newChosen[l] <- choice
               evalStr <- "rownames(orderedTF[orderedTF[,1] == newChosen[1]"
-              for (c in 2:ndims) {
-                evalStr <- paste(evalStr, " & orderedTF[,", c, "] == newChosen[", c, "]", sep = "")
+              if (ndims > 1) {
+                for (c in 2:ndims) {
+                  evalStr <- paste(evalStr, " & orderedTF[,", c, "] == newChosen[", c, "]", sep = "")
+                }
               }
               evalStr <- paste(evalStr, ", ])", sep = "")
               newHexId <- eval(parse(text = evalStr))
-              g <- add.edges(g, c(hexId,newHexId), weight = c(choicePressure), line = l)
+              g <- add.edges(g, c(hexId,newHexId), weight = c(linePressure), line = l)
             }
           }
         }
@@ -615,7 +650,7 @@ eqarrowPlot <- function(graph, layout, edge.lty=rep(1, ecount(graph)),
                         edge.arrow.size=rep(1, ecount(graph)),
                         edge.width=rep(1, ecount(graph)),
                         edge.color=rep("grey", ecount(graph)),
-                        edge.label=NA,
+                        edge.label=rep(NA, ecount(graph)),
                         vertex.shape="circle",
                         edge.curved=autocurve.edges(graph), pr, ...) {
   mapResf <- map(pr, c(10,15))
@@ -626,7 +661,7 @@ eqarrowPlot <- function(graph, layout, edge.lty=rep(1, ecount(graph)),
     plot.igraph(graph2, edge.lty=edge.lty[e], edge.arrow.size=edge.arrow.size[e],
          edge.width=edge.width[e],
          edge.label = edge.label[e],
-         edge.color = "grey", # edge.color[e],
+         edge.color = edge.color[e],
          edge.curved=edge.curved[e], layout=layout, vertex.shape="none",
          vertex.label=NA, add=TRUE, ...)
   }

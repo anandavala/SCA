@@ -11,7 +11,7 @@ TF <- loaded$TF
 symSet <- loaded$symSet
 
 # TF types sorted by prevalence
-TF[order(TF$PP), ]
+TF[order(-TF$PP), ]
 
 # Plot of the sorted spectrum of prevalence values for all Myers-Briggs types. AP = %ofPop.
 sortedPlot(TF, "PP", ptsize = 3, datatype = "Types")
@@ -86,6 +86,7 @@ analyseAllSubgraphs(decomp, interactive = TRUE, pr = pr)
 # 
 # 
 # scenarios <- getScenarios(TF, symSet, cName = "PP", nSkip = 0)
+# head(scenarios)
 # 
 # getPath(scenarios, c("1,b", "2,u", "3,g", "4,t", "5,t"), symSet)
 # 

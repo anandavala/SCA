@@ -131,3 +131,7 @@ analyseAllSubgraphs(decomp.sim, interactive = TRUE, pr = pr.sim)
 
 
 
+# scenarios <- getScenarios(TF, symSet, cName = "PP", nSkip = 0)
+# head(scenarios)
+# 
+# getPath(scenarios, c("1,I", "2,N", "3,F", "4,J"), symSet, chosen = c("E","S","T","P"))

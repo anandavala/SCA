@@ -107,54 +107,73 @@ loadCrime <- function() {
   return(list(TF = TF, symSet = symSet))
 }
 
-getHexagrams <- function(n = 10000, asFactor = TRUE) {
-  out <- data.frame(matrix(NA, nrow=n, ncol=6))
-  lines <- rep(0, 6)
+getNGrams <- function(symSet, n, asFactor = TRUE) {
+  nDims <- ncol(symSet)
+  out <- data.frame(matrix(NA, nrow=n, ncol=nDims))
+  lines <- rep(0, nDims)
   for (r in 1:n) {
-    for (l in 1:6) {
-      lines[l] <- as.integer(sample(c(0,1), 1, replace = TRUE))
+    for (l in 1:nDims) {
+      lines[l] <- as.integer(sample(seq(0,sum(!is.na(symSet[,l])) - 3), 1, replace = TRUE))
     }
     out[r,] <- lines
   }
-  colnames(out) <- c("L1", "L2", "L3", "L4", "L5", "L6")
+  
+  colnames(out) <- paste(rep("D", nDims), seq(nDims), sep = "")
   if (asFactor) {
-    out$L1 <- factor(out$L1)
-    out$L2 <- factor(out$L2)
-    out$L3 <- factor(out$L3)
-    out$L4 <- factor(out$L4)
-    out$L5 <- factor(out$L5)
-    out$L6 <- factor(out$L6)
-    lineSymbols <- c("yin", "yang")
-    levels(out$L1) <- lineSymbols
-    levels(out$L2) <- lineSymbols
-    levels(out$L3) <- lineSymbols
-    levels(out$L4) <- lineSymbols
-    levels(out$L5) <- lineSymbols
-    levels(out$L6) <- lineSymbols
+    for (l in seq(nDims)) {
+      out[,l] <- factor(out[,l])
+      levels(out[,l]) <- symSet[3:sum(!is.na(symSet[,l])), l]
+    }
   }
   return(out)
 }
 
-loadIChing <- function() {
-  # randomly generate n hexagrams
-  # 10,000 hexagrams (any less and there is aliasing)
+getNGramTF <- function(symSet, n, asFactor = TRUE, withRowNames = TRUE) {
+  # randomly generate n n-grams
   seed <- as.numeric(Sys.time())
   print(paste("Seed = ", seed, sep = ""))
   set.seed(seed)
-  Data <- getHexagrams(10000)
+  
+  Data <- getNGrams(symSet, n, asFactor)
+  
+  TF <- getTypeFreqs(Data, symSet, seq(ncol(symSet)))
+  if (withRowNames) {
+    masks <- c()
+    for (r in seq(nrow(TF))) {
+      masks <- append(masks, paste(row2CharVec(TF[r,seq(ncol(TF) - 1)]), collapse = ","))
+    }
+    rownames(TF) <- masks
+  }
+  return(TF)
+}
 
-  symSet <- getSymSetFromData(Data)
-  
-  # focus on relevant data
-  dims <- c(1:6) # columns of interest
-  symSet <- symSet[,dims] # strip down to relevant columns
-  symSet <- symSet[rowSums(is.na(symSet)) != ncol(symSet), ] # strip rows with all NAs
-  
-  TF <- getTypeFreqs(Data, symSet, dims)
-  # rownames(TF) <- c(2, 24, 7, 19, 15, 36, 46, 11, 16, 51, 40, 54, 62, 55, 32, 34, 8, 3, 29, 60, 39, 63, 48, 5, 45, 17, 47, 58, 31, 49, 28, 43, 23, 27, 4, 41, 52, 22, 18, 26, 35, 21, 64, 38, 56, 30, 50, 14, 20, 42, 59, 61, 53, 37, 57, 9, 12, 25, 6, 10, 33, 13, 44, 1)
+loadIChing <- function(n = 10000) {
+  yy <- c("yin", "yang")
+  spec <- list(yy, yy, yy, yy, yy, yy)
+  symSet <- getSymSetFromSpec(spec)
+  # this is where the hexagrams are randomly generated
+  TF <- getNGramTF(symSet, n, withRowNames = FALSE)
   labels = c("1 Force", "2 Field", "3 Sprouting", "4 Enveloping", "5 Attending", "6 Dispute", "7 Legions", "8 Grouping", "9 Small Accumulates", "10 Treading", "11 Pervading", "12 Obstruction", "13 Harmonising People", "14 Great Being", "15 Humbling", "16 Providing For", "17 Following", "18 Corruption", "19 Nearing", "20 Viewing", "21 Biting Through", "22 Adorning", "23 Stripping", "24 Returning", "25 Disentangling", "26 Great Accumulates", "27 Jaws", "28 Great Traverses", "29 Pit", "30 Radiance", "31 Conjoining", "32 Persevering", "33 Retiring", "34 Great Invigorating", "35 Flourishing", "36 Brightness Hiding", "37 Dwelling People", "38 Divergence", "39 Limping", "40 Deliverance", "41 Diminishing", "42 Augmenting", "43 Deciding", "44 Coupling", "45 Great Works", "46 Ascending", "47 Confining", "48 The Well", "49 Skinning", "50 Vessel", "51 Shake", "52 Bound", "53 Gradual Advance", "54 Marrying the Maiden", "55 Abounding", "56 Sojourning", "57 Lady of Fates", "58 Open Expression", "59 Dispersing", "60 Articulating", "61 Centring", "62 Small Traverses", "63 Already Crossing", "64 Not Yet Crossing")
   b2IC = c(2, 24, 7, 19, 15, 36, 46, 11, 16, 51, 40, 54, 62, 55, 32, 34, 8, 3, 29, 60, 39, 63, 48, 5, 45, 17, 47, 58, 31, 49, 28, 43, 23, 27, 4, 41, 52, 22, 18, 26, 35, 21, 64, 38, 56, 30, 50, 14, 20, 42, 59, 61, 53, 37, 57, 9, 12, 25, 6, 10, 33, 13, 44, 1)
   rownames(TF) <- labels[b2IC]
   return(list(TF = TF, symSet = symSet))
 }
+
+# yellow vests opinion poll data
+loadYV <- function() {
+  TF <- read.csv(file = "./data/yellow-vests-opinion-poll-results.csv", head = TRUE, sep = ",", stringsAsFactors = FALSE)
+  TF$D1 <- factor(TF$D1, levels = c("s-2","s-1","s0","s1","s2"), ordered = TRUE)
+  TF$PP1 <- as.double(TF$PP1)
+  TF$PP2 <- as.double(TF$PP2)
+  TF$PP3 <- as.double(TF$PP3)
+  TF$PP4 <- as.double(TF$PP4)
+  TF$PP5 <- as.double(TF$PP5)
+  # Assemble results
+  rownames(TF) <- TF$Type
+  symSet <- data.frame(c1 = c("X", "_", levels(TF$D1)) )
+  return(list(TF = TF, symSet = symSet))
+}
+
+
+
 
