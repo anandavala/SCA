@@ -5,8 +5,8 @@
 #### Initialise ####
 rm(list=ls())
 setwd("~/Documents/Projects/SCA/") # edit to suit your environment
-source("./src/spa-utils.r")
-source("./src/spa-utils-loaders.r")
+source("./src/utils.r")
+source("./src/utils-loaders.r")
 
 # so that we can generate links to more information about each component of the reading.
 urlTemplate <- c("https://ichingdb.pythonanywhere.com/ichingdb/", "/", "/")

@@ -2,8 +2,8 @@
 #### Initialise ####
 rm(list=ls())
 setwd("~/Documents/Projects/SCA/") # edit to suit your environment
-source("./src/spa-utils.r")
-source("./src/spa-utils-loaders.r")
+source("./src/utils.r")
+source("./src/utils-loaders.r")
 library(kohonen)
 coolBlueHotRed <- function(n, alpha = 1) {rainbow(n, end=4/6, alpha=alpha)[n:1]}
 pretty_palette <- c("#1f77b4","#ff7f0e","#2ca02c", "#d62728","#9467bd","#8c564b","#e377c2")

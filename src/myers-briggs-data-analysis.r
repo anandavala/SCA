@@ -1,46 +1,30 @@
+# SPA-MBA
 
 #### Initialise ####
 rm(list=ls())
 setwd("~/Documents/Projects/SCA/") # edit to suit your environment
-source("./src/spa-utils.r")
-source("./src/spa-utils-loaders.r")
+source("./src/utils.r")
+source("./src/utils-loaders.r")
 
-Data <- read.table("./data/IPLORD/iplord_public_2018_10000.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
-# Data <- read.table("./data/IPLORD/iplord_public_2018.csv", header=TRUE, sep = ",", stringsAsFactors = FALSE)
-colnames(Data)
-Data$cleanname <- factor(Data$cleanname)
-Data <- select(Data, year, cleanname, p_chemistry_filed, p_electrical_filed, p_instruments_filed, p_mechanical_filed, p_others_filed)
+loaded <- loadMB()
 
-# summary(Data$p_chemistry_filed)
-# summary(Data$p_electrical_filed)
-# summary(Data$p_instruments_filed)
-# summary(Data$p_mechanical_filed)
-# summary(Data$p_others_filed)
+TF <- loaded$TF
+symSet <- loaded$symSet
 
-# convert numberic to binned ordinal
-# Data$p_chemistry_filed <- n2bf(Data$p_chemistry_filed, 3)
+# compute differences between men and women
+TF <- mutate(TF, PPFM = PPF - PPM, PPMF = PPM - PPF)
+rownames(TF) <- paste(TF$Type, TF$Name, sep = " - ")
 
+# here we select: 
+#   PPT for both females and males
+#   PPF for females
+#   PPM for males
+#   PPFM for females - males
+#   PPMF for males - females
+TF <- select(TF, D1, D2, D3, D4, PP = PPM)
+str(TF)
 
-Data.years <- split(Data, Data$year)
-for (i in 1:length(Data.years)) {
-  Data.years[[i]] <- select(Data.years[[i]], -year)
-  Data.years[[i]] <- gather(Data.years[[i]], type, PP, p_chemistry_filed:p_others_filed, factor_key=TRUE)
-  Data.years[[i]]$PP <- Data.years[[i]]$PP / sum(Data.years[[i]]$PP, na.rm = TRUE) * 100
-}
-Data.years$'2012'
-sum(Data.years$'2012'$PP, na.rm = TRUE)
-
-colnames(Data.years$'2012')
-
-str(Data.years$'2012')
-
-TF <- Data.years$'2012'
-
-# getSymSetFromTF
-symSet <- getSymSetFromTF(TF, c(1,2))
-
-# replace NA with 0
-
+summary(TF$PP)
 
 # TF types sorted by prevalence
 TF[order(TF$PP), ]
@@ -70,14 +54,14 @@ pr <- getPageRanked(g.full.sim, layoutFunc = layout_with_gem)
 # PPT use 0.83
 # PPF use 0.843
 # PPM use 0.901
-g <- trimGraph(g.full.diff, percentile = 0.843)
+g <- trimGraph(g.full.diff, percentile = 0.901)
 pr <- getPageRanked(g, layoutFunc = layout_with_gem)
 
 # using similarity
 # PPT use 0.9753
 # PPF use 0.9987
-# PPM use 1.0, the min connected is the full graph
-g <- trimGraph(g.full.sim, percentile = 0.9987)
+# PPM use 0.99256
+g <- trimGraph(g.full.sim, percentile = 0.99256)
 pr <- getPageRanked(g, layoutFunc = layout_with_gem)
 
 # adjust the percentile value until there are several clusters with minimal isolated nodes (0.359)
@@ -145,3 +129,13 @@ analyseAllSubgraphs(decomp.sim, pr = pr.sim)
 analyseAllSubgraphs(decomp.sim, interactive = TRUE, pr = pr.sim)
 
 
+
+
+scenarios <- getScenarios(TF, symSet, ppCol = "PP", nSkip = 0)
+head(scenarios)
+
+# check that line integrals are path independent (YES)
+getPath(scenarios, c("1,I", "2,N", "3,F", "4,J"), symSet, chosen = c("E","S","T","P"))
+getPath(scenarios, c("4,J", "3,F", "2,N", "1,I"), symSet, chosen = c("E","S","T","P"))
+getPath(scenarios, c("1,I", "3,F", "1,E", "2,N", "3,T", "4,J", "3,F", "1,I"), symSet, chosen = c("E","S","T","P"))
+getPath(scenarios, c("3,F", "1,I", "2,N", "3,T", "1,E", "4,J", "3,F", "1,I"), symSet, chosen = c("E","S","T","P"))
