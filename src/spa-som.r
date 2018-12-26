@@ -1,7 +1,7 @@
 
 #### Initialise ####
 rm(list=ls())
-setwd("~/Documents/Projects/SPA/") # edit to suit your environment
+setwd("~/Documents/Projects/SCA/") # edit to suit your environment
 source("./src/spa-utils.r")
 source("./src/spa-utils-loaders.r")
 library(kohonen)
