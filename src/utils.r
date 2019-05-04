@@ -420,7 +420,7 @@ getSymSetFromTF <- function(tf, symCols) {
     if (length(syms) < maxLvls + 2) {
       syms <- c(syms, rep(NA, maxLvls + 2 - length(syms)))
     }
-    eval(parse(text = paste("symSet$c", c, " <- syms", sep = "")))
+    eval(parse(text = paste("symSet$c", c - symCols[1] + 1, " <- syms", sep = "")))
   }
   colnames(symSet) <- colnames(tf)[symCols]
   return(symSet)
@@ -578,7 +578,9 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE, useSimilarity = FALSE, ppCol = 
             }
             evalStr <- paste(evalStr, ", ])", sep = "")
             newHexId <- eval(parse(text = evalStr))
-            g <- add.edges(g, c(hexId,newHexId), weight = c(linePressure), line = l)
+            if (length(newHexId) == 1) {
+              g <- add.edges(g, c(hexId,newHexId), weight = c(linePressure), line = l)
+            }
           }
         }
       }
@@ -593,24 +595,22 @@ mkGraph <- function(tf, symSet, onlyMax = FALSE, useSimilarity = FALSE, ppCol = 
   return(addWidth(g))
 }
 
-getPageRanked <- function(g, doPlot = TRUE, layoutFunc = NULL, layout = NULL) {
-  if (is.null(layout)) {
-    if (is.null(layoutFunc)) {
-      layout <- layout.auto(g)
-    }
-    else {
-      layout <- layoutFunc(g)
-    }
-  }
+getPageRanked <- function(g, doPlot = TRUE, layoutFunc = NULL, layout = NULL, withPlot = TRUE) {
   pr <- page.rank(g)$vector
-  # plot.igraph(g, layout=layout, vertex.size=map(pr, c(10,15)), vertex.color=map(pr, c(10,15)), 
-  #      vertex.label.font = 2, vertex.label.cex = 1.1, vertex.label.dist = 1.5,
-  #      edge.arrow.size = 1,
-  #      edge.width = E(g)$width)
-  if (!is.null(E(g)$weight)) eqarrowPlot(g, layout, edge.arrow.size=E(g)$width/8,
-              edge.width=E(g)$width, edge.color=E(g)$color, edge.label = NA, pr = pr)
-  else eqarrowPlot(g, layout, edge.arrow.size=1,
-                                         edge.width=1, edge.label = NA, pr = pr)
+  if (withPlot) {
+    if (is.null(layout)) {
+      if (is.null(layoutFunc)) {
+        layout <- layout.auto(g)
+      }
+      else {
+        layout <- layoutFunc(g)
+      }
+    }
+    if (!is.null(E(g)$weight)) eqarrowPlot(g, layout, edge.arrow.size=E(g)$width/8,
+                                           edge.width=E(g)$width, edge.color=E(g)$color, edge.label = NA, pr = pr)
+    else eqarrowPlot(g, layout, edge.arrow.size=1,
+                     edge.width=1, edge.label = NA, pr = pr)
+  }
   return(pr)
 }
 

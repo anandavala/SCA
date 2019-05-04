@@ -11,6 +11,7 @@ source("./src/utils-loaders.r")
 # so that we can generate links to more information about each component of the reading.
 urlTemplate <- c("https://ichingdb.pythonanywhere.com/ichingdb/", "/", "/")
 
+# now contemplate your question or query to the I Ching
 # this is where the hexagrams are randomly generated
 loaded <- loadIChing()
 
@@ -19,6 +20,11 @@ symSet <- loaded$symSet
 
 str(TF)
 summary(TF$PP)
+# TF
+# symSet
+# str(symSet)
+# write.csv(TF, file = "./data/IChing/Global-Transformation-TF.csv")
+# write.csv(symSet, file = "./data/IChing/I-Ching-symSet.csv")
 
 # TF types sorted by prevalence
 TF[order(TF$PP), ]
@@ -38,8 +44,8 @@ analyseSubgraph(decomp, rank = 1, pr = pr, urlTemplate = urlTemplate, layoutFunc
 analyseSubgraph(decomp, rank = 2, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
 analyseSubgraph(decomp, rank = 3, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
 analyseSubgraph(decomp, rank = 4, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
-analyseSubgraph(decomp, rank = 5, pr = pr, urlTemplate = urlTemplate)
-analyseSubgraph(decomp, rank = 6, pr = pr, urlTemplate = urlTemplate)
+analyseSubgraph(decomp, rank = 5, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
+analyseSubgraph(decomp, rank = 6, pr = pr, urlTemplate = urlTemplate, layoutFunc = layout_with_graphopt)
 analyseSubgraph(decomp, rank = 7, pr = pr, urlTemplate = urlTemplate)
 analyseSubgraph(decomp, rank = 8, pr = pr, urlTemplate = urlTemplate)
 analyseSubgraph(decomp, rank = 9, pr = pr, urlTemplate = urlTemplate)
@@ -54,7 +60,7 @@ g.full <- mkGraph(TF, symSet)
 pr <- getPageRanked(g.full, layoutFunc = layout_with_gem)
 
 # keep only the top percentile
-g <- trimGraph(g.full, percentile = 0.5)
+g <- trimGraph(g.full, percentile = 0.33)
 
 pr <- getPageRanked(g, layoutFunc = layout_with_fr)
 

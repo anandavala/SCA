@@ -1,4 +1,4 @@
-# SPA-MBA
+# 
 
 #### Initialise ####
 rm(list=ls())
